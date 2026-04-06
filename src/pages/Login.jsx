@@ -24,7 +24,7 @@ export default function Login() {
     setError('')
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: 'https://np-tournaments.vercel.app/' }
+      options: { redirectTo: window.location.origin + '/' }
     })
     if (error) { setError(error.message); setGoogleLoading(false) }
   }
