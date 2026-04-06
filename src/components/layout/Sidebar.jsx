@@ -5,6 +5,7 @@ const navItems = [
   { to: '/',              icon: '▦', label: 'Dashboard' },
   { to: '/tournaments',   icon: '🏆', label: 'Tournaments' },
   { to: '/registrations', icon: '📋', label: 'Registrations' },
+  { to: '/rankings',      icon: '📈', label: 'Rankings' },
   { to: '/schedule',      icon: '📅', label: 'Schedule', soon: true },
   { to: '/teams',         icon: '⛹', label: 'Teams', soon: true },
 ]
@@ -47,12 +48,17 @@ export default function Sidebar({ director }) {
         <span style={{ marginLeft:'auto', fontSize:9, color:'#4a5568', textTransform:'uppercase', letterSpacing:1 }}>Soon</span>
       </div>
     )
+
     return (
-      <NavLink to={item.to} end={item.to === '/'} style={({ isActive }) => ({
-        ...s.navItem,
-        background: isActive ? '#0d1a0a' : 'transparent',
-        color: isActive ? '#5cb800' : '#6b7a99',
-      })}>
+      <NavLink
+        to={item.to}
+        end={item.to === '/'}
+        style={({ isActive }) => ({
+          ...s.navItem,
+          background: isActive ? '#0d1a0a' : 'transparent',
+          color: isActive ? '#5cb800' : '#6b7a99',
+        })}
+      >
         <span style={{ fontSize:15, width:18, textAlign:'center' }}>{item.icon}</span>
         {item.label}
       </NavLink>
@@ -65,14 +71,18 @@ export default function Sidebar({ director }) {
         <div style={s.logoText}>NP TOURNAMENTS</div>
         <div style={s.logoSub}>Director Portal</div>
       </div>
+
       <nav style={s.nav}>
         <div style={s.navLabel}>Main</div>
         {navItems.map(item => <NavItem key={item.to} item={item} />)}
+
         <div style={{ ...s.navLabel, marginTop:8 }}>Reports</div>
         {reportItems.map(item => <NavItem key={item.to} item={item} />)}
+
         <div style={{ ...s.navLabel, marginTop:8 }}>Tools</div>
         {toolItems.map(item => <NavItem key={item.to} item={item} />)}
       </nav>
+
       <div style={s.footer}>
         <div style={{ fontSize:12, fontWeight:600, color:'#8898b8' }}>{director?.display_name || 'Director'}</div>
         <div style={{ fontSize:10, color:'#2d3748', marginTop:2 }}>{director?.email}</div>
