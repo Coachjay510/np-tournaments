@@ -7,34 +7,35 @@ export function useRankings(selectedSource = 'Next Play Sports') {
   const [error, setError] = useState(null)
 
   const fetchRankings = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+    try {
+      setLoading(true)
+      setError(null)
 
-    const tableName =
-      selectedSource === 'Next Play Sports'
-        ? 'bt_rankings_next_play_tiered'
-        : 'bt_rankings_tiered'
+      const tableName =
+        selectedSource === 'Next Play Sports'
+          ? 'bt_rankings_next_play_tiered'
+          : 'bt_rankings_tiered'
 
-    let query = supabase
-      .from(tableName)
-      .select('*')
-      .order('ranking_division_key', { ascending: true })
-      .order('rank', { ascending: true })
+      let query = supabase
+        .from(tableName)
+        .select('*')
 
-    if (selectedSource !== 'Next Play Sports') {
-      query = query.eq('ranking_source', selectedSource)
-    }
+      if (selectedSource !== 'Next Play Sports') {
+        query = query.eq('ranking_source', selectedSource)
+      }
 
-    const { data, error } = await query
+      const { data, error } = await query
 
-    if (error) {
-      setError(error)
-      setRankings([])
-    } else {
+      if (error) throw error
+
       setRankings(data || [])
+    } catch (err) {
+      console.error('Error loading rankings:', err)
+      setError(err)
+      setRankings([])
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }, [selectedSource])
 
   useEffect(() => {
@@ -45,6 +46,6 @@ export function useRankings(selectedSource = 'Next Play Sports') {
     rankings,
     loading,
     error,
-    refresh: fetchRankings
+    refresh: fetchRankings,
   }
 }
