@@ -41,6 +41,8 @@ export default function Teams() {
   const [source, setSource] = useState('all')
   const [division, setDivision] = useState('all')
   const [linkStatus, setLinkStatus] = useState('all')
+  const [sortBy, setSortBy] = useState('source_team_name')
+  const [sortDir, setSortDir] = useState('asc')
   const [page, setPage] = useState(1)
   const [selectedTeam, setSelectedTeam] = useState(null)
 
@@ -71,17 +73,34 @@ export default function Teams() {
     }
 
     rows.sort((a, b) => {
-      const sourceCompare = (a.ranking_source || '').localeCompare(b.ranking_source || '')
-      if (sourceCompare !== 0) return sourceCompare
+      let av
+      let bv
 
-      const divisionCompare = (a.ranking_division_key || '').localeCompare(b.ranking_division_key || '')
-      if (divisionCompare !== 0) return divisionCompare
+      if (sortBy === 'master_display_name') {
+        av = a.bt_master_teams?.display_name || ''
+        bv = b.bt_master_teams?.display_name || ''
+      } else {
+        av = a[sortBy] ?? ''
+        bv = b[sortBy] ?? ''
+      }
 
-      return (a.source_team_name || '').localeCompare(b.source_team_name || '')
+      const numericFields = ['master_team_id', 'source_team_id']
+
+      if (numericFields.includes(sortBy)) {
+        av = Number(av || 0)
+        bv = Number(bv || 0)
+      } else {
+        av = String(av).toLowerCase()
+        bv = String(bv).toLowerCase()
+      }
+
+      if (av < bv) return sortDir === 'asc' ? -1 : 1
+      if (av > bv) return sortDir === 'asc' ? 1 : -1
+      return 0
     })
 
     return rows
-  }, [teams, source, division, linkStatus, search])
+  }, [teams, source, division, linkStatus, search, sortBy, sortDir])
 
   const totalPages = Math.max(1, Math.ceil(filteredTeams.length / PER_PAGE))
   const pagedTeams = useMemo(() => {
@@ -129,7 +148,7 @@ export default function Teams() {
               TEAM DIRECTORY + MERGE TOOLS
             </div>
             <div style={{ fontSize: 11, color: '#4a5568', marginTop: 4 }}>
-              Search source teams, review master links, and merge duplicate teams
+              Search, sort, and merge duplicate teams
             </div>
           </div>
 
@@ -138,7 +157,7 @@ export default function Teams() {
               padding: 18,
               borderBottom: '1px solid #1a2030',
               display: 'grid',
-              gridTemplateColumns: '2fr 1fr 1fr 1fr',
+              gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr auto',
               gap: 12,
             }}
           >
@@ -168,16 +187,7 @@ export default function Teams() {
                 setPage(1)
                 setSource(e.target.value)
               }}
-              style={{
-                width: '100%',
-                background: '#0e1320',
-                border: '1px solid #1a2030',
-                color: '#d8e0f0',
-                borderRadius: 8,
-                padding: '10px 12px',
-                fontSize: 13,
-                outline: 'none',
-              }}
+              style={{ background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}
             >
               <option value="all">All Sources</option>
               <option value="Covert Hoops">Covert Hoops</option>
@@ -190,16 +200,7 @@ export default function Teams() {
                 setPage(1)
                 setDivision(e.target.value)
               }}
-              style={{
-                width: '100%',
-                background: '#0e1320',
-                border: '1px solid #1a2030',
-                color: '#d8e0f0',
-                borderRadius: 8,
-                padding: '10px 12px',
-                fontSize: 13,
-                outline: 'none',
-              }}
+              style={{ background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}
             >
               <option value="all">All Divisions</option>
               {divisionOptions.map((option) => (
@@ -215,21 +216,47 @@ export default function Teams() {
                 setPage(1)
                 setLinkStatus(e.target.value)
               }}
+              style={{ background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}
+            >
+              <option value="all">All Link Status</option>
+              <option value="linked">Linked</option>
+              <option value="unlinked">Unlinked</option>
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={(e) => {
+                setPage(1)
+                setSortBy(e.target.value)
+              }}
+              style={{ background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}
+            >
+              <option value="source_team_name">Team Name</option>
+              <option value="ranking_source">Source</option>
+              <option value="ranking_division_key">Division</option>
+              <option value="master_display_name">Master Team</option>
+              <option value="master_team_id">Master Team ID</option>
+              <option value="source_team_id">Source Team ID</option>
+            </select>
+
+            <button
+              onClick={() => {
+                setPage(1)
+                setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+              }}
               style={{
-                width: '100%',
                 background: '#0e1320',
                 border: '1px solid #1a2030',
                 color: '#d8e0f0',
                 borderRadius: 8,
                 padding: '10px 12px',
                 fontSize: 13,
-                outline: 'none',
+                fontWeight: 700,
+                cursor: 'pointer',
               }}
             >
-              <option value="all">All Link Status</option>
-              <option value="linked">Linked</option>
-              <option value="unlinked">Unlinked</option>
-            </select>
+              {sortDir === 'asc' ? '↑' : '↓'}
+            </button>
           </div>
 
           {error ? (
