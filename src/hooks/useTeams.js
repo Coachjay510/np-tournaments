@@ -24,11 +24,11 @@ export function useTeams() {
             id,
             display_name,
             organization_id,
-            ranking_division_key
-          ),
-          bt_organizations (
-            id,
-            org_name
+            ranking_division_key,
+            bt_organizations (
+              id,
+              org_name
+            )
           )
         `)
 
@@ -48,7 +48,8 @@ export function useTeams() {
               row.bt_master_teams?.ranking_division_key ||
               row.ranking_division_key,
             organization_id: row.bt_master_teams?.organization_id || null,
-            organization_name: row.bt_organizations?.org_name || null,
+            organization_name:
+              row.bt_master_teams?.bt_organizations?.org_name || null,
             source_count: 0,
             linked_sources: [],
           })
@@ -68,7 +69,7 @@ export function useTeams() {
 
       setTeams(Array.from(grouped.values()))
     } catch (err) {
-      console.error(err)
+      console.error('Error loading teams:', err)
       setError(err)
     } finally {
       setLoading(false)
@@ -113,7 +114,7 @@ export function usePaginatedTeams(teams, page, pageSize, search, sortBy, sortDir
         return sortDirection === 'asc' ? compare : -compare
       }
 
-      const compare = aValue - bValue
+      const compare = Number(aValue || 0) - Number(bValue || 0)
       return sortDirection === 'asc' ? compare : -compare
     })
 
