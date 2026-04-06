@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import Topbar from '../components/layout/Topbar'
 import { useTeamsAdmin } from '../hooks/useTeamsAdmin'
 import TeamMergeModal from '../components/teams/TeamMergeModal'
+import TeamOrgModal from '../components/teams/TeamOrgModal'
 
 function StatCard({ label, value, accent = '#f0f4ff' }) {
   return (
@@ -45,6 +46,7 @@ export default function Teams() {
   const [sortDir, setSortDir] = useState('asc')
   const [page, setPage] = useState(1)
   const [selectedTeam, setSelectedTeam] = useState(null)
+  const [selectedOrgTeam, setSelectedOrgTeam] = useState(null)
 
   const divisionOptions = useMemo(() => {
     const values = [...new Set((teams || []).map((t) => t.ranking_division_key).filter(Boolean))]
@@ -68,7 +70,8 @@ export default function Teams() {
       rows = rows.filter(
         (row) =>
           row.source_team_name?.toLowerCase().includes(q) ||
-          row.bt_master_teams?.display_name?.toLowerCase().includes(q)
+          row.bt_master_teams?.display_name?.toLowerCase().includes(q) ||
+          row.bt_master_teams?.bt_organizations?.org_name?.toLowerCase().includes(q)
       )
     }
 
@@ -79,6 +82,9 @@ export default function Teams() {
       if (sortBy === 'master_display_name') {
         av = a.bt_master_teams?.display_name || ''
         bv = b.bt_master_teams?.display_name || ''
+      } else if (sortBy === 'organization_name') {
+        av = a.bt_master_teams?.bt_organizations?.org_name || ''
+        bv = b.bt_master_teams?.bt_organizations?.org_name || ''
       } else {
         av = a[sortBy] ?? ''
         bv = b[sortBy] ?? ''
@@ -148,7 +154,7 @@ export default function Teams() {
               TEAM DIRECTORY + MERGE TOOLS
             </div>
             <div style={{ fontSize: 11, color: '#4a5568', marginTop: 4 }}>
-              Search, sort, and merge duplicate teams
+              Search, sort, merge duplicate teams, and assign organizations
             </div>
           </div>
 
@@ -168,7 +174,7 @@ export default function Teams() {
                 setPage(1)
                 setSearch(e.target.value)
               }}
-              placeholder="Search team name or master team..."
+              placeholder="Search team, master team, or org..."
               style={{
                 width: '100%',
                 background: '#0e1320',
@@ -181,60 +187,31 @@ export default function Teams() {
               }}
             />
 
-            <select
-              value={source}
-              onChange={(e) => {
-                setPage(1)
-                setSource(e.target.value)
-              }}
-              style={{ background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}
-            >
+            <select value={source} onChange={(e) => { setPage(1); setSource(e.target.value) }} style={{ background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}>
               <option value="all">All Sources</option>
               <option value="Covert Hoops">Covert Hoops</option>
               <option value="Nothing But Net">Nothing But Net</option>
             </select>
 
-            <select
-              value={division}
-              onChange={(e) => {
-                setPage(1)
-                setDivision(e.target.value)
-              }}
-              style={{ background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}
-            >
+            <select value={division} onChange={(e) => { setPage(1); setDivision(e.target.value) }} style={{ background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}>
               <option value="all">All Divisions</option>
               {divisionOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
+                <option key={option} value={option}>{option}</option>
               ))}
             </select>
 
-            <select
-              value={linkStatus}
-              onChange={(e) => {
-                setPage(1)
-                setLinkStatus(e.target.value)
-              }}
-              style={{ background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}
-            >
+            <select value={linkStatus} onChange={(e) => { setPage(1); setLinkStatus(e.target.value) }} style={{ background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}>
               <option value="all">All Link Status</option>
               <option value="linked">Linked</option>
               <option value="unlinked">Unlinked</option>
             </select>
 
-            <select
-              value={sortBy}
-              onChange={(e) => {
-                setPage(1)
-                setSortBy(e.target.value)
-              }}
-              style={{ background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}
-            >
+            <select value={sortBy} onChange={(e) => { setPage(1); setSortBy(e.target.value) }} style={{ background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}>
               <option value="source_team_name">Team Name</option>
               <option value="ranking_source">Source</option>
               <option value="ranking_division_key">Division</option>
               <option value="master_display_name">Master Team</option>
+              <option value="organization_name">Organization</option>
               <option value="master_team_id">Master Team ID</option>
               <option value="source_team_id">Source Team ID</option>
             </select>
@@ -273,24 +250,22 @@ export default function Teams() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: '#0a0f1a' }}>
-                      {['Source Team', 'Source', 'Division', 'Master Team', 'Master ID', 'Source Team ID', 'Status', 'Actions'].map(
-                        (label) => (
-                          <th
-                            key={label}
-                            style={{
-                              textAlign: 'left',
-                              padding: '12px 14px',
-                              fontSize: 11,
-                              color: '#6b7a99',
-                              textTransform: 'uppercase',
-                              letterSpacing: '1px',
-                              borderBottom: '1px solid #1a2030',
-                            }}
-                          >
-                            {label}
-                          </th>
-                        )
-                      )}
+                      {['Source Team', 'Source', 'Division', 'Master Team', 'Organization', 'Master ID', 'Source Team ID', 'Status', 'Actions'].map((label) => (
+                        <th
+                          key={label}
+                          style={{
+                            textAlign: 'left',
+                            padding: '12px 14px',
+                            fontSize: 11,
+                            color: '#6b7a99',
+                            textTransform: 'uppercase',
+                            letterSpacing: '1px',
+                            borderBottom: '1px solid #1a2030',
+                          }}
+                        >
+                          {label}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -300,6 +275,7 @@ export default function Teams() {
                         <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.ranking_source}</td>
                         <td style={{ padding: '13px 14px', color: '#6b7a99', fontSize: 12 }}>{team.ranking_division_key || '—'}</td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.bt_master_teams?.display_name || '—'}</td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.bt_master_teams?.bt_organizations?.org_name || '—'}</td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.master_team_id || '—'}</td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.source_team_id}</td>
                         <td style={{ padding: '13px 14px' }}>
@@ -307,7 +283,7 @@ export default function Teams() {
                             {team.master_team_id ? 'Linked' : 'Unlinked'}
                           </span>
                         </td>
-                        <td style={{ padding: '13px 14px' }}>
+                        <td style={{ padding: '13px 14px', display: 'flex', gap: 8 }}>
                           <button
                             onClick={() => setSelectedTeam(team)}
                             style={{
@@ -323,6 +299,21 @@ export default function Teams() {
                           >
                             Merge
                           </button>
+                          <button
+                            onClick={() => setSelectedOrgTeam(team)}
+                            style={{
+                              background: '#5f51ff',
+                              color: '#fff',
+                              border: 'none',
+                              padding: '8px 12px',
+                              borderRadius: 8,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Org
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -330,15 +321,7 @@ export default function Teams() {
                 </table>
               </div>
 
-              <div
-                style={{
-                  padding: 18,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  borderTop: '1px solid #1a2030',
-                }}
-              >
+              <div style={{ padding: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1a2030' }}>
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
@@ -380,12 +363,8 @@ export default function Teams() {
         </div>
       </div>
 
-      <TeamMergeModal
-        open={!!selectedTeam}
-        team={selectedTeam}
-        onClose={() => setSelectedTeam(null)}
-        onMerged={refresh}
-      />
+      <TeamMergeModal open={!!selectedTeam} team={selectedTeam} onClose={() => setSelectedTeam(null)} onMerged={refresh} />
+      <TeamOrgModal open={!!selectedOrgTeam} team={selectedOrgTeam} onClose={() => setSelectedOrgTeam(null)} onAssigned={refresh} />
     </div>
   )
 }

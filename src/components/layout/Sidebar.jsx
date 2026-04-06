@@ -7,6 +7,7 @@ const navItems = [
   { to: '/registrations', icon: '📋', label: 'Registrations' },
   { to: '/rankings', icon: '📈', label: 'Rankings' },
   { to: '/teams', icon: '⛹', label: 'Teams' },
+  { to: '/organizations', icon: '🏢', label: 'Organizations' },
   { to: '/schedule', icon: '📅', label: 'Schedule', soon: true },
 ]
 

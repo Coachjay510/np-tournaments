@@ -22,7 +22,12 @@ export function useTeamsAdmin() {
           master_team_id,
           bt_master_teams (
             id,
-            display_name
+            display_name,
+            organization_id,
+            bt_organizations (
+              id,
+              org_name
+            )
           )
         `)
         .order('ranking_source', { ascending: true })
