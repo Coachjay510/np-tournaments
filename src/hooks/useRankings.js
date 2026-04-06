@@ -9,17 +9,27 @@ export function useRankings() {
   const fetchRankings = useCallback(async () => {
     setLoading(true)
     setError(null)
+
     const { data, error } = await supabase
-      .from('bt_rankings_with_place')
+      .from('bt_rankings_tiered')
       .select('*')
+      .eq('ranking_source', 'Covert Hoops')
       .order('ranking_division_key', { ascending: true })
       .order('rank', { ascending: true })
-    if (error) { setError(error); setRankings([]) }
-    else { setRankings(data || []) }
+
+    if (error) {
+      setError(error)
+      setRankings([])
+    } else {
+      setRankings(data || [])
+    }
+
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchRankings() }, [fetchRankings])
+  useEffect(() => {
+    fetchRankings()
+  }, [fetchRankings])
 
   return { rankings, loading, error, refresh: fetchRankings }
 }
