@@ -6,7 +6,9 @@ import Dashboard from './pages/Dashboard'
 import Tournaments from './pages/Tournaments'
 import TournamentDetail from './pages/TournamentDetail'
 import Registrations from './pages/Registrations'
+import Teams from './pages/Teams'
 import PublicBracket from './pages/PublicBracket'
+import Rankings from './pages/Rankings'
 
 export default function App() {
   const { director, loading } = useDirector()
@@ -27,6 +29,8 @@ export default function App() {
           <Route path="/tournaments" element={<Tournaments director={director} />} />
           <Route path="/tournaments/:id" element={<TournamentDetail director={director} />} />
           <Route path="/registrations" element={<Registrations director={director} />} />
+          <Route path="/teams" element={<Teams director={director} />} />
+          <Route path="/rankings" element={<Rankings director={director} />} />
         </Route>
       </Routes>
     </BrowserRouter>
