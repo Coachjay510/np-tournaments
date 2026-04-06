@@ -6,31 +6,56 @@ import Dashboard from './pages/Dashboard'
 import Tournaments from './pages/Tournaments'
 import TournamentDetail from './pages/TournamentDetail'
 import Registrations from './pages/Registrations'
-import Teams from './pages/Teams'
 import PublicBracket from './pages/PublicBracket'
 import Rankings from './pages/Rankings'
+import Teams from './pages/Teams'
+import TeamDetail from './pages/TeamDetail'
+import Organizations from './pages/Organizations'
+import OrganizationDetail from './pages/OrganizationDetail'
 
 export default function App() {
   const { director, loading } = useDirector()
 
-  if (loading) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'#04060a', color:'#5cb800', fontFamily:'Anton, sans-serif', fontSize:24, letterSpacing:1 }}>
-      NP TOURNAMENTS
-    </div>
-  )
+  if (loading) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          background: '#04060a',
+          color: '#5cb800',
+          fontFamily: 'Anton, sans-serif',
+          fontSize: 24,
+          letterSpacing: 1,
+        }}
+      >
+        NP TOURNAMENTS
+      </div>
+    )
+  }
 
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/t/:slug/bracket" element={<PublicBracket />} />
         <Route path="/login" element={<Login />} />
-        <Route element={director ? <AppShell director={director} /> : <Navigate to="/login" />}>
+
+        <Route
+          element={
+            director ? <AppShell director={director} /> : <Navigate to="/login" />
+          }
+        >
           <Route path="/" element={<Dashboard director={director} />} />
           <Route path="/tournaments" element={<Tournaments director={director} />} />
           <Route path="/tournaments/:id" element={<TournamentDetail director={director} />} />
           <Route path="/registrations" element={<Registrations director={director} />} />
-          <Route path="/teams" element={<Teams director={director} />} />
           <Route path="/rankings" element={<Rankings director={director} />} />
+          <Route path="/teams" element={<Teams director={director} />} />
+          <Route path="/teams/:teamId" element={<TeamDetail director={director} />} />
+          <Route path="/organizations" element={<Organizations director={director} />} />
+          <Route path="/organizations/:orgId" element={<OrganizationDetail director={director} />} />
         </Route>
       </Routes>
     </BrowserRouter>
