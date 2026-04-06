@@ -26,7 +26,8 @@ function StatCard({ label, value, accent='#f0f4ff' }) {
 }
 
 export default function Rankings() {
-  const { rankings, loading, error, refresh } = useRankings()
+  const [source, setSource] = useState('Next Play Sports')
+  const { rankings, loading, error, refresh } = useRankings(source)
 
   const [division, setDivision] = useState('all')
   const [gender, setGender] = useState('all')
@@ -131,6 +132,8 @@ export default function Rankings() {
 
           <div style={{ padding:18, borderBottom:'1px solid #1a2030' }}>
             <RankingFilters
+              source={source}
+              onSourceChange={setSource}
               division={division}
               onDivisionChange={setDivision}
               divisionOptions={divisionOptions}
