@@ -25,7 +25,7 @@ export default function RankingFilters({
   onSourceChange,
   divisions,
   onDivisionsChange,
-  divisionOptions,
+  divisionOptions = [],
   gender,
   onGenderChange,
   search,
@@ -55,14 +55,20 @@ export default function RankingFilters({
           multiple
           value={divisions}
           onChange={handleMultiDivisionChange}
-          style={{ ...inputStyle, height: 120 }}
+          style={{ ...inputStyle, height: 140 }}
           title="Hold Command or Ctrl to select multiple divisions"
         >
-          {divisionOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
+          {divisionOptions.length === 0 ? (
+            <option disabled value="">
+              No divisions found
             </option>
-          ))}
+          ) : (
+            divisionOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))
+          )}
         </select>
 
         <select value={gender} onChange={(e) => onGenderChange(e.target.value)} style={inputStyle}>
