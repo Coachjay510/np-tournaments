@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
+function sourceAbbrev(source = '') {
+  const map = {
+    'Covert Hoops': 'CH',
+    'Nothing But Net': 'NBN',
+  }
+  return map[source] || source
+}
+
 export function useTeams() {
   const [teams, setTeams] = useState([])
   const [loading, setLoading] = useState(true)
@@ -11,7 +19,7 @@ export function useTeams() {
       setLoading(true)
       setError(null)
 
-      const { data, error } = await supabase
+      const { data: links, error: linksError } = await supabase
         .from('bt_team_links')
         .select(`
           id,
@@ -19,55 +27,90 @@ export function useTeams() {
           ranking_division_key,
           source_team_name,
           source_team_id,
-          master_team_id,
-          bt_master_teams (
+          master_team_id
+        `)
+
+      if (linksError) throw linksError
+
+      const masterIds = [...new Set((links || []).map((r) => r.master_team_id).filter(Boolean))]
+      let masterMap = new Map()
+
+      if (masterIds.length) {
+        const { data: masters, error: mastersError } = await supabase
+          .from('bt_master_teams')
+          .select(`
             id,
             display_name,
             organization_id,
-            ranking_division_key,
-            bt_organizations (
-              id,
-              org_name
-            )
-          )
-        `)
+            ranking_division_key
+          `)
+          .in('id', masterIds)
 
-      if (error) throw error
+        if (mastersError) throw mastersError
+
+        const orgIds = [...new Set((masters || []).map((m) => m.organization_id).filter(Boolean))]
+        let orgMap = new Map()
+
+        if (orgIds.length) {
+          const { data: orgs, error: orgsError } = await supabase
+            .from('bt_organizations')
+            .select('id, org_name')
+            .in('id', orgIds)
+
+          if (orgsError) throw orgsError
+          orgMap = new Map((orgs || []).map((o) => [Number(o.id), o]))
+        }
+
+        masterMap = new Map(
+          (masters || []).map((m) => [
+            Number(m.id),
+            {
+              ...m,
+              org_name: m.organization_id ? orgMap.get(Number(m.organization_id))?.org_name || null : null,
+            },
+          ])
+        )
+      }
 
       const grouped = new Map()
 
-      for (const row of data || []) {
+      for (const row of links || []) {
         const masterId = row.master_team_id || `source_${row.source_team_id}`
+        const master = row.master_team_id ? masterMap.get(Number(row.master_team_id)) : null
 
         if (!grouped.has(masterId)) {
           grouped.set(masterId, {
+            row_key: String(masterId),
             master_team_id: row.master_team_id,
-            display_name:
-              row.bt_master_teams?.display_name || row.source_team_name,
-            ranking_division_key:
-              row.bt_master_teams?.ranking_division_key ||
-              row.ranking_division_key,
-            organization_id: row.bt_master_teams?.organization_id || null,
-            organization_name:
-              row.bt_master_teams?.bt_organizations?.org_name || null,
+            display_name: master?.display_name || row.source_team_name,
+            ranking_division_key: master?.ranking_division_key || row.ranking_division_key,
+            organization_id: master?.organization_id || null,
+            organization_name: master?.org_name || null,
             source_count: 0,
+            source_labels: new Set(),
             linked_sources: [],
           })
         }
 
         const existing = grouped.get(masterId)
-
         existing.source_count += 1
+        existing.source_labels.add(sourceAbbrev(row.ranking_source))
         existing.linked_sources.push({
           id: row.id,
           source_team_id: row.source_team_id,
           ranking_source: row.ranking_source,
+          ranking_source_abbrev: sourceAbbrev(row.ranking_source),
           ranking_division_key: row.ranking_division_key,
           source_team_name: row.source_team_name,
         })
       }
 
-      setTeams(Array.from(grouped.values()))
+      const finalRows = Array.from(grouped.values()).map((team) => ({
+        ...team,
+        source_names: Array.from(team.source_labels).sort().join(', '),
+      }))
+
+      setTeams(finalRows)
     } catch (err) {
       console.error('Error loading teams:', err)
       setError(err)
@@ -98,7 +141,8 @@ export function usePaginatedTeams(teams, page, pageSize, search, sortBy, sortDir
         (team) =>
           team.display_name?.toLowerCase().includes(lower) ||
           team.organization_name?.toLowerCase().includes(lower) ||
-          team.ranking_division_key?.toLowerCase().includes(lower)
+          team.ranking_division_key?.toLowerCase().includes(lower) ||
+          team.source_names?.toLowerCase().includes(lower)
       )
     }
 
@@ -119,7 +163,7 @@ export function usePaginatedTeams(teams, page, pageSize, search, sortBy, sortDir
     })
 
     const total = filtered.length
-    const totalPages = Math.ceil(total / pageSize)
+    const totalPages = Math.max(1, Math.ceil(total / pageSize))
     const start = (page - 1) * pageSize
     const paginated = filtered.slice(start, start + pageSize)
 
