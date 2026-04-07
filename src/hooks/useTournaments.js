@@ -11,12 +11,21 @@ export function useTournaments(directorId) {
   }, [directorId])
 
   async function fetchTournaments() {
-    const { data } = await supabase
+    setLoading(true)
+
+    const { data, error } = await supabase
       .from('tournaments')
-      .select('*, divisions(count), teams(count)')
+      .select('*')
       .eq('director_id', directorId)
       .order('start_date', { ascending: false })
-    setTournaments(data || [])
+
+    if (error) {
+      console.error('Failed to fetch tournaments:', error)
+      setTournaments([])
+    } else {
+      setTournaments(data || [])
+    }
+
     setLoading(false)
   }
 
@@ -26,7 +35,11 @@ export function useTournaments(directorId) {
       .insert({ ...payload, director_id: directorId })
       .select()
       .single()
-    if (!error) setTournaments(prev => [data, ...prev])
+
+    if (!error) {
+      setTournaments((prev) => [data, ...prev])
+    }
+
     return { data, error }
   }
 
@@ -37,15 +50,37 @@ export function useTournaments(directorId) {
       .eq('id', id)
       .select()
       .single()
-    if (!error) setTournaments(prev => prev.map(t => t.id === id ? data : t))
+
+    if (!error) {
+      setTournaments((prev) =>
+        prev.map((t) => (t.id === id ? data : t))
+      )
+    }
+
     return { data, error }
   }
 
   async function deleteTournament(id) {
-    const { error } = await supabase.from('tournaments').delete().eq('id', id)
-    if (!error) setTournaments(prev => prev.filter(t => t.id !== id))
+    const { error } = await supabase
+      .from('tournaments')
+      .delete()
+      .eq('id', id)
+
+    if (!error) {
+      setTournaments((prev) =>
+        prev.filter((t) => t.id !== id)
+      )
+    }
+
     return { error }
   }
 
-  return { tournaments, loading, createTournament, updateTournament, deleteTournament, refetch: fetchTournaments }
+  return {
+    tournaments,
+    loading,
+    createTournament,
+    updateTournament,
+    deleteTournament,
+    refetch: fetchTournaments,
+  }
 }

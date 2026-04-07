@@ -20,12 +20,23 @@ const tabStyle = (active) => ({
   cursor: 'pointer',
 })
 
+const chipStyle = (active) => ({
+  padding: '8px 12px',
+  borderRadius: 8,
+  border: active ? '1px solid #1a3a0a' : '1px solid #1a2030',
+  background: active ? '#0d1a0a' : 'transparent',
+  color: active ? '#5cb800' : '#c0cce0',
+  fontSize: 12,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+})
+
 export default function RankingFilters({
   source,
   onSourceChange,
   divisions,
   onDivisionsChange,
-  divisionOptions,
+  divisionOptions = [],
   gender,
   onGenderChange,
   search,
@@ -37,9 +48,17 @@ export default function RankingFilters({
   topMode,
   onTopModeChange,
 }) {
-  function handleMultiDivisionChange(e) {
-    const values = Array.from(e.target.selectedOptions).map((opt) => opt.value)
-    onDivisionsChange(values)
+  function toggleDivision(value) {
+    if (divisions.includes(value)) {
+      onDivisionsChange(divisions.filter((d) => d !== value))
+      return
+    }
+
+    onDivisionsChange([...divisions, value])
+  }
+
+  function clearDivisions() {
+    onDivisionsChange([])
   }
 
   return (
@@ -49,20 +68,6 @@ export default function RankingFilters({
           <option value="Next Play Sports">Next Play Sports</option>
           <option value="Covert Hoops">Covert Hoops</option>
           <option value="Nothing But Net">Nothing But Net</option>
-        </select>
-
-        <select
-          multiple
-          value={divisions}
-          onChange={handleMultiDivisionChange}
-          style={{ ...inputStyle, height: 120 }}
-          title="Hold Command or Ctrl to select multiple divisions"
-        >
-          {divisionOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
         </select>
 
         <select value={gender} onChange={(e) => onGenderChange(e.target.value)} style={inputStyle}>
@@ -93,6 +98,7 @@ export default function RankingFilters({
             style={inputStyle}
           />
           <button
+            type="button"
             onClick={() => onSortDirChange(sortDir === 'asc' ? 'desc' : 'asc')}
             style={{
               ...inputStyle,
@@ -106,17 +112,65 @@ export default function RankingFilters({
             {sortDir === 'asc' ? '↑' : '↓'}
           </button>
         </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            onClick={clearDivisions}
+            style={{
+              ...inputStyle,
+              cursor: 'pointer',
+              fontWeight: 700,
+              padding: '10px 12px',
+            }}
+          >
+            Clear Divisions
+          </button>
+        </div>
       </div>
 
-      <div style={{ color: '#6b7a99', fontSize: 11 }}>
-        Hold Command/Ctrl to select multiple divisions.
+      <div>
+        <div style={{ color: '#6b7a99', fontSize: 11, marginBottom: 8 }}>
+          Divisions
+        </div>
+
+        {divisionOptions.length === 0 ? (
+          <div style={{ color: '#6b7a99', fontSize: 12 }}>
+            No divisions found
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {divisionOptions.map((opt) => {
+              const active = divisions.includes(opt.value)
+
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => toggleDivision(opt.value)}
+                  style={chipStyle(active)}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button onClick={() => onTopModeChange('all')} style={tabStyle(topMode === 'all')}>All</button>
-        <button onClick={() => onTopModeChange('10')} style={tabStyle(topMode === '10')}>Top 10</button>
-        <button onClick={() => onTopModeChange('25')} style={tabStyle(topMode === '25')}>Top 25</button>
-        <button onClick={() => onTopModeChange('50')} style={tabStyle(topMode === '50')}>Top 50</button>
+        <button type="button" onClick={() => onTopModeChange('all')} style={tabStyle(topMode === 'all')}>
+          All
+        </button>
+        <button type="button" onClick={() => onTopModeChange('10')} style={tabStyle(topMode === '10')}>
+          Top 10
+        </button>
+        <button type="button" onClick={() => onTopModeChange('25')} style={tabStyle(topMode === '25')}>
+          Top 25
+        </button>
+        <button type="button" onClick={() => onTopModeChange('50')} style={tabStyle(topMode === '50')}>
+          Top 50
+        </button>
       </div>
     </div>
   )
