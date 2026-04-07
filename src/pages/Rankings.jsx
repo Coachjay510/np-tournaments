@@ -70,7 +70,8 @@ function StatCard({ label, value, accent = '#f0f4ff' }) {
 
 export default function Rankings() {
   const [source, setSource] = useState('Next Play Sports')
-  const { rankings, loading, error, refresh } = useRankings(source)
+  const { rows: rankings, divisionOptions, loading, error } = useRankings()
+  const refresh = () => window.location.reload()
 
   const [divisions, setDivisions] = useState([])
   const [gender, setGender] = useState('all')
@@ -84,15 +85,6 @@ export default function Rankings() {
     setPage(1)
   }, [source, divisions, gender, search, sortBy, sortDir, topMode])
 
-  const divisionOptions = useMemo(() => {
-    const values = [...new Set((rankings || []).map((r) => r.ranking_division_key).filter(Boolean))]
-      .sort((a, b) => divisionLabel(a).localeCompare(divisionLabel(b)))
-
-    return values.map((value) => ({
-      value,
-      label: divisionLabel(value),
-    }))
-  }, [rankings])
 
   const preparedRows = useMemo(() => {
     let rows = (rankings || []).map((row) => ({

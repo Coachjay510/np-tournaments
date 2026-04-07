@@ -1,45 +1,29 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
-export function useRankings(selectedDivisions = []) {
+export function useRankings() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    let isMounted = true
+    let mounted = true
 
     async function loadRankings() {
       setLoading(true)
-      setError(null)
 
-      let query = supabase
+      const { data, error } = await supabase
         .from('bt_rankings_next_play_tiered')
-        .select(`
-          master_team_id,
-          base_master_team_id,
-          team_id,
-          team_name,
-          ranking_division_key,
-          ranking_points,
-          wins,
-          losses,
-          rank
-        `)
+        .select('*')
+        .eq('ranking_source', 'Next Play Sports')
         .order('ranking_division_key', { ascending: true })
         .order('rank', { ascending: true })
 
-      if (selectedDivisions.length > 0) {
-        query = query.in('ranking_division_key', selectedDivisions)
-      }
-
-      const { data, error } = await query
-
-      if (!isMounted) return
+      if (!mounted) return
 
       if (error) {
-        console.error('Failed to load rankings', error)
-        setError(error.message || 'Failed to load rankings')
+        console.error(error)
+        setError(error)
         setRows([])
       } else {
         setRows(data || [])
@@ -51,22 +35,22 @@ export function useRankings(selectedDivisions = []) {
     loadRankings()
 
     return () => {
-      isMounted = false
+      mounted = false
     }
-  }, [selectedDivisions])
+  }, [])
 
-  const groupedRows = useMemo(() => {
-    return rows.reduce((acc, row) => {
-      const key = row.ranking_division_key || 'unknown'
-      if (!acc[key]) acc[key] = []
-      acc[key].push(row)
-      return acc
-    }, {})
+  const divisionOptions = useMemo(() => {
+    return [...new Set(rows.map((row) => row.ranking_division_key).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b))
+      .map((value) => ({
+        value,
+        label: value.replaceAll('_', ' '),
+      }))
   }, [rows])
 
   return {
     rows,
-    groupedRows,
+    divisionOptions,
     loading,
     error,
   }
