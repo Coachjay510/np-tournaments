@@ -3,21 +3,21 @@ import { useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabaseClient'
 import { uploadLogo } from '@/lib/uploadLogo'
 
-export default function TeamDetailPage() {
-  const { teamId } = useParams()
-  const [team, setTeam] = useState(null)
+export default function OrganizationDetailPage() {
+  const { orgId } = useParams()
+  const [organization, setOrganization] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [logoFile, setLogoFile] = useState(null)
   const [error, setError] = useState(null)
   const [form, setForm] = useState({
-    team_name: '',
-    division_key: '',
-    gender: '',
-    age_group: '',
-    graduating_year: '',
-    organization_id: '',
+    org_name: '',
+    city: '',
+    state: '',
+    website: '',
+    primary_color: '',
+    secondary_color: '',
     contact_name: '',
     contact_email: '',
     contact_phone: '',
@@ -27,59 +27,44 @@ export default function TeamDetailPage() {
   useEffect(() => {
     let isMounted = true
 
-    async function loadTeam() {
+    async function loadOrganization() {
       setLoading(true)
       setError(null)
 
-      const numericTeamId = /^\d+$/.test(String(teamId)) ? Number(teamId) : null
+      const numericOrgId = /^\d+$/.test(String(orgId)) ? Number(orgId) : null
 
-      if (!numericTeamId) {
+      if (!numericOrgId) {
         if (isMounted) {
-          setError('This rankings row is not linked to an editable master team yet.')
+          setError('Invalid organization ID.')
           setLoading(false)
         }
         return
       }
 
       const { data, error } = await supabase
-        .from('bt_master_teams')
-        .select(`
-          *,
-          organization:bt_organizations (
-            id,
-            org_name,
-            city,
-            state,
-            website,
-            primary_color,
-            secondary_color,
-            contact_name,
-            contact_email,
-            contact_phone,
-            logo_url
-          )
-        `)
-        .eq('id', numericTeamId)
+        .from('bt_organizations')
+        .select('*')
+        .eq('id', numericOrgId)
         .maybeSingle()
 
       if (!isMounted) return
 
       if (error) {
-        console.error('Failed to load team detail', error)
-        setError(error.message || 'Failed to load team detail')
-        setTeam(null)
+        console.error('Failed to load organization detail', error)
+        setError(error.message || 'Failed to load organization detail')
+        setOrganization(null)
       } else if (!data) {
-        setError('Team not found.')
-        setTeam(null)
+        setError('Organization not found.')
+        setOrganization(null)
       } else {
-        setTeam(data)
+        setOrganization(data)
         setForm({
-          team_name: data.team_name || '',
-          division_key: data.division_key || '',
-          gender: data.gender || '',
-          age_group: data.age_group || '',
-          graduating_year: data.graduating_year ?? '',
-          organization_id: data.organization_id ?? '',
+          org_name: data.org_name || '',
+          city: data.city || '',
+          state: data.state || '',
+          website: data.website || '',
+          primary_color: data.primary_color || '',
+          secondary_color: data.secondary_color || '',
           contact_name: data.contact_name || '',
           contact_email: data.contact_email || '',
           contact_phone: data.contact_phone || '',
@@ -90,12 +75,12 @@ export default function TeamDetailPage() {
       setLoading(false)
     }
 
-    loadTeam()
+    loadOrganization()
 
     return () => {
       isMounted = false
     }
-  }, [teamId])
+  }, [orgId])
 
   const handleChange = (event) => {
     const { name, value } = event.target
@@ -111,9 +96,9 @@ export default function TeamDetailPage() {
   }
 
   const handleLogoUpload = async () => {
-    const numericTeamId = /^\d+$/.test(String(teamId)) ? Number(teamId) : null
+    const numericOrgId = /^\d+$/.test(String(orgId)) ? Number(orgId) : null
 
-    if (!numericTeamId || !logoFile) return
+    if (!numericOrgId || !logoFile) return
 
     setUploadingLogo(true)
     setError(null)
@@ -121,30 +106,15 @@ export default function TeamDetailPage() {
     try {
       const { publicUrl } = await uploadLogo({
         file: logoFile,
-        folder: 'teams',
-        recordId: numericTeamId,
+        folder: 'organizations',
+        recordId: numericOrgId,
       })
 
       const { data, error } = await supabase
-        .from('bt_master_teams')
+        .from('bt_organizations')
         .update({ logo_url: publicUrl })
-        .eq('id', numericTeamId)
-        .select(`
-          *,
-          organization:bt_organizations (
-            id,
-            org_name,
-            city,
-            state,
-            website,
-            primary_color,
-            secondary_color,
-            contact_name,
-            contact_email,
-            contact_phone,
-            logo_url
-          )
-        `)
+        .eq('id', numericOrgId)
+        .select()
         .maybeSingle()
 
       if (error) throw error
@@ -154,10 +124,10 @@ export default function TeamDetailPage() {
         logo_url: data?.logo_url || publicUrl,
       }))
 
-      setTeam(data)
+      setOrganization(data)
       setLogoFile(null)
     } catch (err) {
-      console.error('Failed to upload team logo', err)
+      console.error('Failed to upload organization logo', err)
       setError(err.message || 'Failed to upload logo')
     }
 
@@ -165,44 +135,29 @@ export default function TeamDetailPage() {
   }
 
   const handleRemoveLogo = async () => {
-    const numericTeamId = /^\d+$/.test(String(teamId)) ? Number(teamId) : null
+    const numericOrgId = /^\d+$/.test(String(orgId)) ? Number(orgId) : null
 
-    if (!numericTeamId) return
+    if (!numericOrgId) return
 
     setUploadingLogo(true)
     setError(null)
 
     const { data, error } = await supabase
-      .from('bt_master_teams')
+      .from('bt_organizations')
       .update({ logo_url: null })
-      .eq('id', numericTeamId)
-      .select(`
-        *,
-        organization:bt_organizations (
-          id,
-          org_name,
-          city,
-          state,
-          website,
-          primary_color,
-          secondary_color,
-          contact_name,
-          contact_email,
-          contact_phone,
-          logo_url
-        )
-      `)
+      .eq('id', numericOrgId)
+      .select()
       .maybeSingle()
 
     if (error) {
-      console.error('Failed to remove team logo', error)
+      console.error('Failed to remove organization logo', error)
       setError(error.message || 'Failed to remove logo')
     } else {
       setForm((current) => ({
         ...current,
         logo_url: '',
       }))
-      setTeam(data)
+      setOrganization(data)
       setLogoFile(null)
     }
 
@@ -212,10 +167,10 @@ export default function TeamDetailPage() {
   const handleSave = async (event) => {
     event.preventDefault()
 
-    const numericTeamId = /^\d+$/.test(String(teamId)) ? Number(teamId) : null
+    const numericOrgId = /^\d+$/.test(String(orgId)) ? Number(orgId) : null
 
-    if (!numericTeamId) {
-      setError('This rankings row is not linked to an editable master team yet.')
+    if (!numericOrgId) {
+      setError('Invalid organization ID.')
       return
     }
 
@@ -223,12 +178,12 @@ export default function TeamDetailPage() {
     setError(null)
 
     const payload = {
-      team_name: form.team_name,
-      division_key: form.division_key,
-      gender: form.gender,
-      age_group: form.age_group,
-      graduating_year: form.graduating_year === '' ? null : Number(form.graduating_year),
-      organization_id: form.organization_id === '' ? null : Number(form.organization_id),
+      org_name: form.org_name,
+      city: form.city,
+      state: form.state,
+      website: form.website,
+      primary_color: form.primary_color,
+      secondary_color: form.secondary_color,
       contact_name: form.contact_name,
       contact_email: form.contact_email,
       contact_phone: form.contact_phone,
@@ -236,32 +191,17 @@ export default function TeamDetailPage() {
     }
 
     const { data, error } = await supabase
-      .from('bt_master_teams')
+      .from('bt_organizations')
       .update(payload)
-      .eq('id', numericTeamId)
-      .select(`
-        *,
-        organization:bt_organizations (
-          id,
-          org_name,
-          city,
-          state,
-          website,
-          primary_color,
-          secondary_color,
-          contact_name,
-          contact_email,
-          contact_phone,
-          logo_url
-        )
-      `)
+      .eq('id', numericOrgId)
+      .select()
       .maybeSingle()
 
     if (error) {
-      console.error('Failed to save team detail', error)
-      setError(error.message || 'Failed to save team detail')
+      console.error('Failed to save organization detail', error)
+      setError(error.message || 'Failed to save organization detail')
     } else if (data) {
-      setTeam(data)
+      setOrganization(data)
       setForm((current) => ({
         ...current,
         logo_url: data.logo_url || '',
@@ -272,7 +212,7 @@ export default function TeamDetailPage() {
   }
 
   if (loading) {
-    return <div className="p-6 text-sm text-neutral-500">Loading team...</div>
+    return <div className="p-6 text-sm text-neutral-500">Loading organization...</div>
   }
 
   if (error) {
@@ -282,22 +222,22 @@ export default function TeamDetailPage() {
   return (
     <div className="max-w-4xl p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-neutral-900">Edit Team</h1>
+        <h1 className="text-2xl font-bold text-neutral-900">Edit Organization</h1>
         <p className="mt-1 text-sm text-neutral-500">
-          Update team profile, org assignment, contact info, and logo.
+          Update organization profile, contact info, colors, and logo.
         </p>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6 rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
         <div className="space-y-3 rounded-xl border border-neutral-200 p-4">
           <div>
-            <h2 className="text-sm font-semibold text-neutral-900">Team Logo</h2>
+            <h2 className="text-sm font-semibold text-neutral-900">Organization Logo</h2>
           </div>
 
           {form.logo_url ? (
             <img
               src={form.logo_url}
-              alt={form.team_name || 'Team logo'}
+              alt={form.org_name || 'Organization logo'}
               className="h-24 w-24 rounded-lg border border-neutral-200 object-contain"
             />
           ) : (
@@ -329,65 +269,65 @@ export default function TeamDetailPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <label className="space-y-1">
-            <span className="text-sm font-medium text-neutral-700">Team Name</span>
+          <label className="space-y-1 md:col-span-2">
+            <span className="text-sm font-medium text-neutral-700">Organization Name</span>
             <input
-              name="team_name"
-              value={form.team_name}
+              name="org_name"
+              value={form.org_name}
               onChange={handleChange}
               className="w-full rounded-lg border border-neutral-300 px-3 py-2"
             />
           </label>
 
           <label className="space-y-1">
-            <span className="text-sm font-medium text-neutral-700">Division Key</span>
+            <span className="text-sm font-medium text-neutral-700">City</span>
             <input
-              name="division_key"
-              value={form.division_key}
+              name="city"
+              value={form.city}
               onChange={handleChange}
               className="w-full rounded-lg border border-neutral-300 px-3 py-2"
             />
           </label>
 
           <label className="space-y-1">
-            <span className="text-sm font-medium text-neutral-700">Gender</span>
+            <span className="text-sm font-medium text-neutral-700">State</span>
             <input
-              name="gender"
-              value={form.gender}
+              name="state"
+              value={form.state}
+              onChange={handleChange}
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+            />
+          </label>
+
+          <label className="space-y-1 md:col-span-2">
+            <span className="text-sm font-medium text-neutral-700">Website</span>
+            <input
+              name="website"
+              value={form.website}
               onChange={handleChange}
               className="w-full rounded-lg border border-neutral-300 px-3 py-2"
             />
           </label>
 
           <label className="space-y-1">
-            <span className="text-sm font-medium text-neutral-700">Age Group</span>
+            <span className="text-sm font-medium text-neutral-700">Primary Color</span>
             <input
-              name="age_group"
-              value={form.age_group}
+              name="primary_color"
+              value={form.primary_color}
               onChange={handleChange}
               className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+              placeholder="#000000"
             />
           </label>
 
           <label className="space-y-1">
-            <span className="text-sm font-medium text-neutral-700">Graduating Year</span>
+            <span className="text-sm font-medium text-neutral-700">Secondary Color</span>
             <input
-              name="graduating_year"
-              type="number"
-              value={form.graduating_year}
+              name="secondary_color"
+              value={form.secondary_color}
               onChange={handleChange}
               className="w-full rounded-lg border border-neutral-300 px-3 py-2"
-            />
-          </label>
-
-          <label className="space-y-1">
-            <span className="text-sm font-medium text-neutral-700">Organization ID</span>
-            <input
-              name="organization_id"
-              type="number"
-              value={form.organization_id}
-              onChange={handleChange}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+              placeholder="#ffffff"
             />
           </label>
 
@@ -429,7 +369,7 @@ export default function TeamDetailPage() {
             disabled={saving}
             className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
           >
-            {saving ? 'Saving...' : 'Save Team'}
+            {saving ? 'Saving...' : 'Save Organization'}
           </button>
         </div>
       </form>
