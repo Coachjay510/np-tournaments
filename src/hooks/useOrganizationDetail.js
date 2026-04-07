@@ -5,6 +5,7 @@ export function useOrganizationDetail(orgId) {
   const [organization, setOrganization] = useState(null)
   const [teams, setTeams] = useState([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
   const fetchOrganizationDetail = useCallback(async () => {
@@ -21,7 +22,6 @@ export function useOrganizationDetail(orgId) {
         .single()
 
       if (orgError) throw orgError
-      setOrganization(orgData)
 
       const { data: masterTeams, error: teamError } = await supabase
         .from('bt_master_teams')
@@ -33,29 +33,27 @@ export function useOrganizationDetail(orgId) {
 
       const masterIds = (masterTeams || []).map((t) => t.id)
 
-      if (!masterIds.length) {
-        setTeams([])
-        setLoading(false)
-        return
+      let rankingRows = []
+      if (masterIds.length) {
+        const { data } = await supabase
+          .from('bt_rankings_next_play_tiered')
+          .select('*')
+          .in('master_team_id', masterIds)
+          .order('ranking_division_key', { ascending: true })
+          .order('rank', { ascending: true })
+
+        rankingRows = data || []
       }
 
-      const { data: rankingRows, error: rankingError } = await supabase
-        .from('bt_rankings_next_play_tiered')
-        .select('*')
-        .in('master_team_id', masterIds)
-        .order('ranking_division_key', { ascending: true })
-        .order('rank', { ascending: true })
-
-      if (rankingError) throw rankingError
-
       const merged = (masterTeams || []).map((team) => {
-        const ranking = (rankingRows || []).find((r) => Number(r.master_team_id) === Number(team.id))
+        const ranking = rankingRows.find((r) => Number(r.master_team_id) === Number(team.id))
         return {
           ...team,
           ranking,
         }
       })
 
+      setOrganization(orgData)
       setTeams(merged)
     } catch (err) {
       console.error('Error loading organization detail:', err)
@@ -69,11 +67,37 @@ export function useOrganizationDetail(orgId) {
     fetchOrganizationDetail()
   }, [fetchOrganizationDetail])
 
+  const saveOrganization = useCallback(
+    async (updates) => {
+      try {
+        setSaving(true)
+        setError(null)
+
+        const { error } = await supabase
+          .from('bt_organizations')
+          .update(updates)
+          .eq('id', orgId)
+
+        if (error) throw error
+
+        await fetchOrganizationDetail()
+      } catch (err) {
+        console.error('Error saving organization:', err)
+        setError(err)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [orgId, fetchOrganizationDetail]
+  )
+
   return {
     organization,
     teams,
     loading,
+    saving,
     error,
     refresh: fetchOrganizationDetail,
+    saveOrganization,
   }
 }

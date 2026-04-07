@@ -23,8 +23,8 @@ const tabStyle = (active) => ({
 export default function RankingFilters({
   source,
   onSourceChange,
-  division,
-  onDivisionChange,
+  divisions,
+  onDivisionsChange,
   divisionOptions,
   gender,
   onGenderChange,
@@ -37,6 +37,11 @@ export default function RankingFilters({
   topMode,
   onTopModeChange,
 }) {
+  function handleMultiDivisionChange(e) {
+    const values = Array.from(e.target.selectedOptions).map((opt) => opt.value)
+    onDivisionsChange(values)
+  }
+
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
@@ -46,8 +51,13 @@ export default function RankingFilters({
           <option value="Nothing But Net">Nothing But Net</option>
         </select>
 
-        <select value={division} onChange={(e) => onDivisionChange(e.target.value)} style={inputStyle}>
-          <option value="all">All divisions</option>
+        <select
+          multiple
+          value={divisions}
+          onChange={handleMultiDivisionChange}
+          style={{ ...inputStyle, height: 120 }}
+          title="Hold Command or Ctrl to select multiple divisions"
+        >
           {divisionOptions.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
@@ -96,6 +106,10 @@ export default function RankingFilters({
             {sortDir === 'asc' ? '↑' : '↓'}
           </button>
         </div>
+      </div>
+
+      <div style={{ color: '#6b7a99', fontSize: 11 }}>
+        Hold Command/Ctrl to select multiple divisions.
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

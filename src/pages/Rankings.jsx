@@ -15,27 +15,26 @@ const DIVISION_LABELS = {
   '10_11u_boys': '10/11U Boys',
   '11u_boys': '11U Boys',
   '11_12u_boys': '11/12U Boys',
+  '11_12u_girls': '11/12U Girls',
   '12u_boys': '12U Boys',
   '12_13u_boys': '12/13U Boys',
+  '12u_girls': '12U Girls',
   '13u_boys': '13U Boys',
   '13_14u_boys': '13/14U Boys',
-  '14u_boys': '14U Boys',
-  '14_15u_boys': '14/15U Boys',
-  '15u_boys': '15U Boys',
-  '15_16u_boys': '15/16U Boys',
-  '16u_boys': '16U Boys',
-  '16_17u_boys': '16/17U Boys',
-  '17u_boys': '17U Boys',
-  '10u_girls': '10U Girls',
-  '11_12u_girls': '11/12U Girls',
-  '12u_girls': '12U Girls',
   '13u_girls': '13U Girls',
   '13_14u_girls': '13/14U Girls',
+  '14u_boys': '14U Boys',
+  '14_15u_boys': '14/15U Boys',
   '14_15u_girls': '14/15U Girls',
+  '15u_boys': '15U Boys',
+  '15_16u_boys': '15/16U Boys',
   '15u_girls': '15U Girls',
   '15_16u_girls': '15/16U Girls',
+  '16u_boys': '16U Boys',
+  '16_17u_boys': '16/17U Boys',
   '16u_girls': '16U Girls',
   '16_17u_girls': '16/17U Girls',
+  '17u_boys': '17U Boys',
   '17u_girls': '17U Girls',
   '3rd_girls': '3rd Girls',
   '3_4th_girls': '3/4th Girls',
@@ -52,23 +51,8 @@ const DIVISION_LABELS = {
   '9th_girls': '9th Girls',
 }
 
-const DIVISION_ORDER = [
-  '8u_boys','8_9u_boys','9u_boys','9_10u_boys','10u_boys','10_11u_boys','11u_boys','11_12u_boys',
-  '12u_boys','12_13u_boys','13u_boys','13_14u_boys','14u_boys','14_15u_boys','15u_boys','15_16u_boys',
-  '16u_boys','16_17u_boys','17u_boys',
-  '10u_girls','11_12u_girls','12u_girls','13u_girls','13_14u_girls','14_15u_girls','15u_girls',
-  '15_16u_girls','16u_girls','16_17u_girls','17u_girls',
-  '3rd_girls','3_4th_girls','4th_girls','4_5th_girls','5th_girls','5_6th_girls','6th_girls',
-  '6_7th_girls','7th_girls','7_8th_girls','8th_girls','8_9th_girls','9th_girls',
-]
-
 function divisionLabel(key) {
   return DIVISION_LABELS[key] || key?.replaceAll('_', ' ') || '—'
-}
-
-function divisionSortIndex(key) {
-  const index = DIVISION_ORDER.indexOf(key)
-  return index === -1 ? 999 : index
 }
 
 function StatCard({ label, value, accent = '#f0f4ff' }) {
@@ -88,7 +72,7 @@ export default function Rankings() {
   const [source, setSource] = useState('Next Play Sports')
   const { rankings, loading, error, refresh } = useRankings(source)
 
-  const [division, setDivision] = useState('all')
+  const [divisions, setDivisions] = useState([])
   const [gender, setGender] = useState('all')
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('rank')
@@ -98,11 +82,11 @@ export default function Rankings() {
 
   useEffect(() => {
     setPage(1)
-  }, [source, division, gender, search, sortBy, sortDir, topMode])
+  }, [source, divisions, gender, search, sortBy, sortDir, topMode])
 
   const divisionOptions = useMemo(() => {
     const values = [...new Set((rankings || []).map((r) => r.ranking_division_key).filter(Boolean))]
-      .sort((a, b) => divisionSortIndex(a) - divisionSortIndex(b) || divisionLabel(a).localeCompare(divisionLabel(b)))
+      .sort((a, b) => divisionLabel(a).localeCompare(divisionLabel(b)))
 
     return values.map((value) => ({
       value,
@@ -116,8 +100,8 @@ export default function Rankings() {
       division_label: divisionLabel(row.ranking_division_key),
     }))
 
-    if (division !== 'all') {
-      rows = rows.filter((r) => r.ranking_division_key === division)
+    if (divisions.length) {
+      rows = rows.filter((r) => divisions.includes(r.ranking_division_key))
     }
 
     if (gender !== 'all') {
@@ -139,14 +123,7 @@ export default function Rankings() {
         const bv = (b[sortBy] || '').toString().toLowerCase()
         if (av < bv) return sortDir === 'asc' ? -1 : 1
         if (av > bv) return sortDir === 'asc' ? 1 : -1
-        return divisionSortIndex(a.ranking_division_key) - divisionSortIndex(b.ranking_division_key)
-      }
-
-      if (sortBy === 'rank') {
-        const sameDivision = a.ranking_division_key === b.ranking_division_key
-        if (!sameDivision) {
-          return divisionSortIndex(a.ranking_division_key) - divisionSortIndex(b.ranking_division_key)
-        }
+        return 0
       }
 
       const av = Number(a[sortBy] || 0)
@@ -161,7 +138,7 @@ export default function Rankings() {
     }
 
     return rows
-  }, [rankings, division, gender, search, sortBy, sortDir, topMode])
+  }, [rankings, divisions, gender, search, sortBy, sortDir, topMode])
 
   const totalPages = Math.max(1, Math.ceil(preparedRows.length / PER_PAGE))
   const pagedRows = useMemo(() => {
@@ -209,7 +186,7 @@ export default function Rankings() {
               {source.toUpperCase()} RANKINGS
             </div>
             <div style={{ fontSize: 11, color: '#4a5568', marginTop: 4 }}>
-              Showing 25 per page • Use ↑ and ↓ to switch lowest / highest order
+              Showing 25 per page
             </div>
           </div>
 
@@ -217,8 +194,8 @@ export default function Rankings() {
             <RankingFilters
               source={source}
               onSourceChange={setSource}
-              division={division}
-              onDivisionChange={setDivision}
+              divisions={divisions}
+              onDivisionsChange={setDivisions}
               divisionOptions={divisionOptions}
               gender={gender}
               onGenderChange={setGender}
@@ -243,17 +220,50 @@ export default function Rankings() {
             </div>
           ) : (
             <>
-              <RankingsTable rows={pagedRows} />
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#0a0f1a' }}>
+                      {['Rank', 'Team', 'Level', 'Division', 'W', 'L', 'Pts', 'SOS', 'PF', 'PA', 'Diff', 'Teams'].map((label) => (
+                        <th
+                          key={label}
+                          style={{
+                            textAlign: 'left',
+                            padding: '12px 14px',
+                            fontSize: 11,
+                            color: '#6b7a99',
+                            textTransform: 'uppercase',
+                            letterSpacing: '1px',
+                            borderBottom: '1px solid #1a2030',
+                          }}
+                        >
+                          {label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagedRows.map((row) => (
+                      <tr key={`${row.ranking_source}-${row.ranking_division_key}-${row.team_name}-${row.rank}`} style={{ borderBottom: '1px solid #0e1320' }}>
+                        <td style={{ padding: '13px 14px', color: '#d4a017', fontWeight: 700 }}>#{row.rank}</td>
+                        <td style={{ padding: '13px 14px', color: '#d8e0f0', fontWeight: 600 }}>{row.team_name}</td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{row.skill_level || '—'}</td>
+                        <td style={{ padding: '13px 14px', color: '#6b7a99', fontSize: 12 }}>{row.division_label || row.ranking_division_key}</td>
+                        <td style={{ padding: '13px 14px', color: '#5cb800' }}>{row.wins ?? 0}</td>
+                        <td style={{ padding: '13px 14px', color: '#ff9d7a' }}>{row.losses ?? 0}</td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{row.ranking_points ?? 0}</td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{Number(row.opponent_strength || 0).toFixed(2)}</td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{row.points_for ?? 0}</td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{row.points_against ?? 0}</td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{row.point_diff ?? 0}</td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{row.division_team_count ?? 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-              <div
-                style={{
-                  padding: 18,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  borderTop: '1px solid #1a2030',
-                }}
-              >
+              <div style={{ padding: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1a2030' }}>
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
@@ -264,7 +274,7 @@ export default function Rankings() {
                     padding: '8px 14px',
                     borderRadius: 8,
                     fontSize: 12,
-                    cursor: page === 1 ? 'not-allowed' : 'pointer',
+                    cursor: 'pointer',
                   }}
                 >
                   Previous
@@ -284,7 +294,7 @@ export default function Rankings() {
                     padding: '8px 14px',
                     borderRadius: 8,
                     fontSize: 12,
-                    cursor: page === totalPages ? 'not-allowed' : 'pointer',
+                    cursor: 'pointer',
                   }}
                 >
                   Next
