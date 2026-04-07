@@ -12,7 +12,7 @@ const overlayStyle = {
 }
 
 const modalStyle = {
-  width: 'min(760px, 92vw)',
+  width: 'min(820px, 92vw)',
   maxHeight: '88vh',
   overflow: 'hidden',
   background: '#080c12',
@@ -33,127 +33,140 @@ const inputStyle = {
 }
 
 function normalizeName(name = '') {
-  return name.toLowerCase().replace(/[^a-z0-9 ]/gi, '').replace(/\s+/g, ' ').trim()
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
-function similarityHint(sourceName, targetName) {
-  const a = normalizeName(sourceName)
-  const b = normalizeName(targetName)
-  if (!a || !b) return 0
-  if (a === b) return 100
-  if (a.includes(b) || b.includes(a)) return 90
+function similarityScore(a = '', b = '') {
+  const aa = normalizeName(a)
+  const bb = normalizeName(b)
 
-  const aWords = new Set(a.split(' '))
-  const bWords = new Set(b.split(' '))
+  if (!aa || !bb) return 0
+  if (aa === bb) return 100
+  if (aa.includes(bb) || bb.includes(aa)) return 92
+
+  const aWords = new Set(aa.split(' '))
+  const bWords = new Set(bb.split(' '))
   let overlap = 0
+
   for (const word of aWords) {
     if (bWords.has(word)) overlap += 1
   }
+
   return Math.round((overlap / Math.max(aWords.size, bWords.size, 1)) * 100)
 }
 
 export default function TeamMergeModal({ open, onClose, team, onMerged }) {
   const [search, setSearch] = useState('')
-  const [masters, setMasters] = useState([])
+  const [targets, setTargets] = useState([])
+  const [selectedTargetId, setSelectedTargetId] = useState('')
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    if (!open || !team) return
-    setSearch(team.source_team_name || '')
-  }, [open, team])
+  const sourceName =
+    team?.source_team_name ||
+    team?.display_name ||
+    team?.linked_sources?.[0]?.source_team_name ||
+    ''
+
+  const sourceDivision = team?.ranking_division_key || ''
 
   useEffect(() => {
-    if (!open || !team) return
+    if (!open) return
+    setSearch(sourceName)
+    setSelectedTargetId('')
+    setError(null)
+  }, [open, sourceName])
 
-    const loadMasters = async () => {
+  useEffect(() => {
+    if (!open || !sourceDivision) return
+
+    const loadTargets = async () => {
       setLoading(true)
       setError(null)
 
       let query = supabase
         .from('bt_master_teams')
-        .select('id, display_name, ranking_division_key, age_group, gender')
-        .eq('ranking_division_key', team.ranking_division_key)
+        .select(`
+          id,
+          display_name,
+          ranking_division_key,
+          organization_id,
+          bt_organizations (
+            id,
+            org_name
+          )
+        `)
+        .eq('ranking_division_key', sourceDivision)
         .order('display_name', { ascending: true })
-        .limit(50)
+        .limit(100)
 
       if (search.trim()) {
         query = query.ilike('display_name', `%${search.trim()}%`)
       }
 
       const { data, error } = await query
-      if (error) setError(error)
-      setMasters(data || [])
+
+      if (error) {
+        setError(error)
+        setLoading(false)
+        return
+      }
+
+      const filtered = (data || []).filter((row) => Number(row.id) !== Number(team?.master_team_id))
+      setTargets(filtered)
       setLoading(false)
     }
 
-    loadMasters()
-  }, [open, team, search])
+    loadTargets()
+  }, [open, sourceDivision, search, team])
 
   const suggestions = useMemo(() => {
-    return [...masters]
-      .map((m) => ({
-        ...m,
-        matchScore: similarityHint(team?.source_team_name || '', m.display_name || ''),
+    return [...targets]
+      .map((target) => ({
+        ...target,
+        matchScore: similarityScore(sourceName, target.display_name),
       }))
       .sort((a, b) => b.matchScore - a.matchScore || a.display_name.localeCompare(b.display_name))
-      .slice(0, 8)
-  }, [masters, team])
+      .slice(0, 12)
+  }, [targets, sourceName])
 
   if (!open || !team) return null
 
-  async function handleMerge(masterTeamId) {
+  async function handleMerge() {
+    if (!selectedTargetId) return
+
     setSaving(true)
     setError(null)
 
-    const { error } = await supabase
-      .from('bt_team_links')
-      .update({ master_team_id: masterTeamId })
-      .eq('id', team.id)
+    const sourceMasterId = team.master_team_id
 
-    if (error) {
-      setError(error)
-      setSaving(false)
-      return
-    }
+    if (sourceMasterId) {
+      const { error: linksError } = await supabase
+        .from('bt_team_links')
+        .update({ master_team_id: Number(selectedTargetId) })
+        .eq('master_team_id', Number(sourceMasterId))
 
-    setSaving(false)
-    onMerged?.()
-    onClose?.()
-  }
+      if (linksError) {
+        setError(linksError)
+        setSaving(false)
+        return
+      }
+    } else if (team.id) {
+      const { error: singleError } = await supabase
+        .from('bt_team_links')
+        .update({ master_team_id: Number(selectedTargetId) })
+        .eq('id', team.id)
 
-  async function handleCreateAndMerge() {
-    setSaving(true)
-    setError(null)
-
-    const displayName = search.trim() || team.source_team_name
-
-    const { data: created, error: createError } = await supabase
-      .from('bt_master_teams')
-      .insert({
-        master_team_key: `${normalizeName(displayName).replace(/\s+/g, '_')}__${team.ranking_division_key}__${Date.now()}`,
-        display_name: displayName,
-        ranking_division_key: team.ranking_division_key,
-      })
-      .select('id')
-      .single()
-
-    if (createError) {
-      setError(createError)
-      setSaving(false)
-      return
-    }
-
-    const { error: updateError } = await supabase
-      .from('bt_team_links')
-      .update({ master_team_id: created.id })
-      .eq('id', team.id)
-
-    if (updateError) {
-      setError(updateError)
-      setSaving(false)
-      return
+      if (singleError) {
+        setError(singleError)
+        setSaving(false)
+        return
+      }
     }
 
     setSaving(false)
@@ -165,9 +178,11 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
     <div style={overlayStyle} onClick={onClose}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={{ padding: '16px 18px', borderBottom: '1px solid #1a2030' }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#d8e0f0' }}>Merge Team</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#d8e0f0' }}>
+            Merge Team
+          </div>
           <div style={{ marginTop: 6, color: '#6b7a99', fontSize: 12 }}>
-            Link this source team to an existing master team, or create a new one.
+            Move this team into another master team and keep Supabase in sync.
           </div>
         </div>
 
@@ -176,15 +191,17 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
             <div style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '1px' }}>
               Source Team
             </div>
-            <div style={{ marginTop: 8, color: '#f0f4ff', fontWeight: 700 }}>{team.source_team_name}</div>
+            <div style={{ marginTop: 8, color: '#f0f4ff', fontWeight: 700 }}>
+              {sourceName}
+            </div>
             <div style={{ marginTop: 6, color: '#6b7a99', fontSize: 12 }}>
-              {team.ranking_source} • {team.ranking_division_key}
+              {team?.ranking_source || 'Master Team'} • {sourceDivision || '—'} • Current Master ID {team?.master_team_id || '—'}
             </div>
           </div>
 
           <div>
             <div style={{ marginBottom: 8, color: '#c0cce0', fontSize: 12, fontWeight: 700 }}>
-              Search existing master teams
+              Search target master teams
             </div>
             <input
               value={search}
@@ -196,64 +213,56 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
 
           <div>
             <div style={{ marginBottom: 8, color: '#c0cce0', fontSize: 12, fontWeight: 700 }}>
-              Suggested matches
+              Suggested targets
             </div>
 
-            <div style={{ display: 'grid', gap: 8, maxHeight: 260, overflowY: 'auto' }}>
+            <div style={{ display: 'grid', gap: 8, maxHeight: 280, overflowY: 'auto' }}>
               {loading ? (
                 <div style={{ color: '#6b7a99', fontSize: 12 }}>Loading suggestions...</div>
               ) : suggestions.length ? (
-                suggestions.map((m) => (
-                  <div
-                    key={m.id}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr auto auto',
-                      gap: 12,
-                      alignItems: 'center',
-                      background: '#0b111b',
-                      border: '1px solid #1a2030',
-                      borderRadius: 10,
-                      padding: 12,
-                    }}
-                  >
-                    <div>
-                      <div style={{ color: '#f0f4ff', fontWeight: 600 }}>{m.display_name}</div>
-                      <div style={{ color: '#6b7a99', fontSize: 12, marginTop: 4 }}>
-                        Master ID {m.id} • {m.ranking_division_key}
-                      </div>
-                    </div>
+                suggestions.map((target) => {
+                  const selected = String(selectedTargetId) === String(target.id)
 
-                    <div
-                      style={{
-                        color: m.matchScore >= 90 ? '#5cb800' : '#d4a017',
-                        fontSize: 12,
-                        fontWeight: 700,
-                      }}
-                    >
-                      {m.matchScore}% match
-                    </div>
-
+                  return (
                     <button
-                      onClick={() => handleMerge(m.id)}
-                      disabled={saving}
+                      key={target.id}
+                      onClick={() => setSelectedTargetId(String(target.id))}
                       style={{
-                        background: '#5cb800',
-                        color: '#04060a',
-                        border: 'none',
-                        padding: '8px 12px',
-                        borderRadius: 8,
-                        fontSize: 12,
-                        fontWeight: 700,
+                        width: '100%',
+                        textAlign: 'left',
+                        background: selected ? '#0d1a0a' : '#0b111b',
+                        border: selected ? '1px solid #1a3a0a' : '1px solid #1a2030',
+                        borderRadius: 10,
+                        padding: 12,
                         cursor: 'pointer',
                       }}
                     >
-                      Merge
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                        <div>
+                          <div style={{ color: '#f0f4ff', fontWeight: 700 }}>
+                            {target.display_name}
+                          </div>
+                          <div style={{ color: '#6b7a99', fontSize: 12, marginTop: 4 }}>
+                            Master ID {target.id} • {target.ranking_division_key} • {target.bt_organizations?.org_name || 'No org'}
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            color: target.matchScore >= 90 ? '#5cb800' : '#d4a017',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {target.matchScore}% match
+                        </div>
+                      </div>
                     </button>
-                  </div>
-                ))
+                  )
+                })
               ) : (
-                <div style={{ color: '#6b7a99', fontSize: 12 }}>No suggestions found.</div>
+                <div style={{ color: '#6b7a99', fontSize: 12 }}>No target teams found.</div>
               )}
             </div>
           </div>
@@ -291,10 +300,10 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
           </button>
 
           <button
-            onClick={handleCreateAndMerge}
-            disabled={saving}
+            onClick={handleMerge}
+            disabled={saving || !selectedTargetId}
             style={{
-              background: '#1e88ff',
+              background: '#ff7a1a',
               color: '#fff',
               border: 'none',
               padding: '10px 14px',
@@ -304,7 +313,7 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
               cursor: 'pointer',
             }}
           >
-            Create New Master + Merge
+            Save Merge
           </button>
         </div>
       </div>
