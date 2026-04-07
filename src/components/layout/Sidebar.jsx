@@ -8,7 +8,7 @@ const navItems = [
   { to: '/rankings', icon: '📈', label: 'Rankings' },
   { to: '/teams', icon: '⛹', label: 'Teams' },
   { to: '/organizations', icon: '🏢', label: 'Organizations' },
-  { to: '/schedule', icon: '📅', label: 'Schedule', soon: true },
+  { to: '/schedule', icon: '📅', label: 'Schedule' },
 ]
 
 const reportItems = [
@@ -17,6 +17,7 @@ const reportItems = [
 ]
 
 const toolItems = [
+  { to: '/ref-portal', icon: '🦓', label: 'Ref Portal' },
   { to: '/announcements', icon: '📢', label: 'Announcements', soon: true },
   { to: '/staff', icon: '👥', label: 'Staff', soon: true },
   { to: '/settings', icon: '⚙', label: 'Settings', soon: true },

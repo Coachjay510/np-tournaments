@@ -12,6 +12,8 @@ import Teams from './pages/Teams'
 import TeamDetail from './pages/TeamDetail'
 import Organizations from './pages/Organizations'
 import OrganizationDetail from './pages/OrganizationDetail'
+import Schedule from './pages/Schedule'
+import RefPortal from './pages/RefPortal'
 
 export default function App() {
   const { director, loading } = useDirector()
@@ -56,6 +58,8 @@ export default function App() {
           <Route path="/teams/:teamId" element={<TeamDetail director={director} />} />
           <Route path="/organizations" element={<Organizations director={director} />} />
           <Route path="/organizations/:orgId" element={<OrganizationDetail director={director} />} />
+          <Route path="/schedule" element={<Schedule director={director} />} />
+          <Route path="/ref-portal" element={<RefPortal director={director} />} />
         </Route>
       </Routes>
     </BrowserRouter>
