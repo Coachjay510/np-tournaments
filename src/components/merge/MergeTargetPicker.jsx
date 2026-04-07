@@ -66,6 +66,7 @@ export default function MergeTargetPicker({
       .insert({
         ranking_source: sourceRow.ranking_source,
         source_team_id: sourceRow.team_id,
+        ranking_division_key: sourceRow.ranking_division_key,
         master_team_id: Number(selectedTargetId),
       })
 
@@ -120,6 +121,7 @@ export default function MergeTargetPicker({
       .insert({
         ranking_source: sourceRow.ranking_source,
         source_team_id: sourceRow.team_id,
+        ranking_division_key: sourceRow.ranking_division_key,
         master_team_id: newTeam.id,
       })
 
