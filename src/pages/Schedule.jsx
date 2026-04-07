@@ -11,17 +11,9 @@ function Card({ title, value, accent = '#5cb800' }) {
         padding: 18,
       }}
     >
-      <div
-        style={{
-          fontSize: 11,
-          color: '#4a5568',
-          textTransform: 'uppercase',
-          letterSpacing: 1,
-        }}
-      >
+      <div style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1 }}>
         {title}
       </div>
-
       <div
         style={{
           marginTop: 8,
@@ -88,27 +80,14 @@ export default function Schedule() {
     )
   }, [games, selectedTournament])
 
-  const completedGames = filteredGames.filter(
-    (g) => g.status === 'completed'
-  ).length
-
-  const uniqueCourts = new Set(
-    filteredGames.map((g) => g.court_name).filter(Boolean)
-  ).size
+  const completedGames = filteredGames.filter((g) => g.status === 'completed').length
+  const uniqueCourts = new Set(filteredGames.map((g) => g.court_name).filter(Boolean)).size
 
   return (
     <div style={{ padding: 24, color: '#fff' }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 24,
-        }}
-      >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 32 }}>Scheduler</h1>
-
           <div style={{ color: '#6b7a99', marginTop: 6 }}>
             Tournament schedules, games, courts, and bracket flow.
           </div>
@@ -152,14 +131,7 @@ export default function Schedule() {
           marginBottom: 20,
         }}
       >
-        <label
-          style={{
-            display: 'block',
-            marginBottom: 8,
-            color: '#6b7a99',
-            fontSize: 12,
-          }}
-        >
+        <label style={{ display: 'block', marginBottom: 8, color: '#6b7a99', fontSize: 12 }}>
           Tournament
         </label>
 
@@ -176,7 +148,6 @@ export default function Schedule() {
           }}
         >
           <option value="all">All Tournaments</option>
-
           {tournaments.map((tournament) => (
             <option key={tournament.id} value={tournament.id}>
               {tournament.name}
@@ -193,24 +164,14 @@ export default function Schedule() {
           overflow: 'hidden',
         }}
       >
-        <div
-          style={{
-            padding: 16,
-            borderBottom: '1px solid #1a2030',
-            fontWeight: 700,
-          }}
-        >
+        <div style={{ padding: 16, borderBottom: '1px solid #1a2030', fontWeight: 700 }}>
           Scheduled Games
         </div>
 
         {loading ? (
-          <div style={{ padding: 24, color: '#6b7a99' }}>
-            Loading schedule...
-          </div>
+          <div style={{ padding: 24, color: '#6b7a99' }}>Loading schedule...</div>
         ) : filteredGames.length === 0 ? (
-          <div style={{ padding: 24, color: '#6b7a99' }}>
-            No games found.
-          </div>
+          <div style={{ padding: 24, color: '#6b7a99' }}>No games found.</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -225,13 +186,9 @@ export default function Schedule() {
                 <th style={th}>Status</th>
               </tr>
             </thead>
-
             <tbody>
               {filteredGames.map((game) => (
-                <tr
-                  key={game.id}
-                  style={{ borderBottom: '1px solid #111827' }}
-                >
+                <tr key={game.id} style={{ borderBottom: '1px solid #111827' }}>
                   <td style={td}>{game.game_date || '—'}</td>
                   <td style={td}>{game.game_time || '—'}</td>
                   <td style={td}>{game.court_name || '—'}</td>
@@ -249,4 +206,3 @@ export default function Schedule() {
     </div>
   )
 }
-```

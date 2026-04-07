@@ -1,3 +1,5 @@
+import { useMemo, useState } from 'react'
+
 const mockRefs = [
   {
     id: 1,
@@ -137,16 +139,8 @@ export default function RefPortal() {
         }}
       >
         <StatCard label="Refs" value={filteredRefs.length} />
-        <StatCard
-          label="Assigned Games"
-          value={totalGames}
-          accent="#4cafef"
-        />
-        <StatCard
-          label="Outstanding Pay"
-          value={`$${totalOwed}`}
-          accent="#ff8a65"
-        />
+        <StatCard label="Assigned Games" value={totalGames} accent="#4cafef" />
+        <StatCard label="Outstanding Pay" value={`$${totalOwed}`} accent="#ff8a65" />
         <StatCard label="Average Rate" value="$40" accent="#d4a017" />
       </div>
 
@@ -207,10 +201,7 @@ export default function RefPortal() {
 
           <tbody>
             {filteredRefs.map((ref) => (
-              <tr
-                key={ref.id}
-                style={{ borderBottom: '1px solid #111827' }}
-              >
+              <tr key={ref.id} style={{ borderBottom: '1px solid #111827' }}>
                 <td style={td}>{ref.name}</td>
                 <td style={td}>{ref.level}</td>
                 <td style={td}>{ref.gamesAssigned}</td>
@@ -226,4 +217,3 @@ export default function RefPortal() {
     </div>
   )
 }
-```
