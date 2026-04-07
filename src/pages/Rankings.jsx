@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import Topbar from '../components/layout/Topbar'
 import { useRankings } from '../hooks/useRankings'
 import RankingFilters from '../components/rankings/RankingFilters'
-import RankingsTable from '../components/rankings/RankingsTable'
 
 const PER_PAGE = 25
 
@@ -13,6 +12,7 @@ const DIVISION_LABELS = {
   '9_10u_boys': '9/10U Boys',
   '10u_boys': '10U Boys',
   '10_11u_boys': '10/11U Boys',
+  '10u_girls': '10U Girls',
   '11u_boys': '11U Boys',
   '11_12u_boys': '11/12U Boys',
   '11_12u_girls': '11/12U Girls',
@@ -57,11 +57,34 @@ function divisionLabel(key) {
 
 function StatCard({ label, value, accent = '#f0f4ff' }) {
   return (
-    <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 12, padding: 16 }}>
-      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#4a5568', marginBottom: 8 }}>
+    <div
+      style={{
+        background: '#080c12',
+        border: '1px solid #1a2030',
+        borderRadius: 12,
+        padding: 16,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          textTransform: 'uppercase',
+          letterSpacing: '1.2px',
+          color: '#4a5568',
+          marginBottom: 8,
+        }}
+      >
         {label}
       </div>
-      <div style={{ fontFamily: 'Anton, sans-serif', fontSize: 30, color: accent, lineHeight: 1, letterSpacing: '0.5px' }}>
+      <div
+        style={{
+          fontFamily: 'Anton, sans-serif',
+          fontSize: 30,
+          color: accent,
+          lineHeight: 1,
+          letterSpacing: '0.5px',
+        }}
+      >
         {value}
       </div>
     </div>
@@ -70,8 +93,7 @@ function StatCard({ label, value, accent = '#f0f4ff' }) {
 
 export default function Rankings() {
   const [source, setSource] = useState('Next Play Sports')
-  const { rows: rankings, divisionOptions, loading, error } = useRankings()
-  const refresh = () => window.location.reload()
+  const { rankings, divisionOptions, loading, error, refresh } = useRankings(source)
 
   const [divisions, setDivisions] = useState([])
   const [gender, setGender] = useState('all')
@@ -85,6 +107,19 @@ export default function Rankings() {
     setPage(1)
   }, [source, divisions, gender, search, sortBy, sortDir, topMode])
 
+  useEffect(() => {
+    setDivisions([])
+    setGender('all')
+    setSearch('')
+    setTopMode('all')
+  }, [source])
+
+  const formattedDivisionOptions = useMemo(() => {
+    return (divisionOptions || []).map((option) => ({
+      value: option.value,
+      label: DIVISION_LABELS[option.value] || option.label || divisionLabel(option.value),
+    }))
+  }, [divisionOptions])
 
   const preparedRows = useMemo(() => {
     let rows = (rankings || []).map((row) => ({
@@ -113,6 +148,7 @@ export default function Rankings() {
       if (sortBy === 'team_name' || sortBy === 'division_label' || sortBy === 'skill_level') {
         const av = (a[sortBy] || '').toString().toLowerCase()
         const bv = (b[sortBy] || '').toString().toLowerCase()
+
         if (av < bv) return sortDir === 'asc' ? -1 : 1
         if (av > bv) return sortDir === 'asc' ? 1 : -1
         return 0
@@ -120,8 +156,10 @@ export default function Rankings() {
 
       const av = Number(a[sortBy] || 0)
       const bv = Number(b[sortBy] || 0)
+
       if (av < bv) return sortDir === 'asc' ? -1 : 1
       if (av > bv) return sortDir === 'asc' ? 1 : -1
+
       return (a.team_name || '').localeCompare(b.team_name || '')
     })
 
@@ -133,14 +171,32 @@ export default function Rankings() {
   }, [rankings, divisions, gender, search, sortBy, sortDir, topMode])
 
   const totalPages = Math.max(1, Math.ceil(preparedRows.length / PER_PAGE))
+
   const pagedRows = useMemo(() => {
     const start = (page - 1) * PER_PAGE
     return preparedRows.slice(start, start + PER_PAGE)
   }, [preparedRows, page])
 
   const topTeam = preparedRows[0]
-  const uniqueTeams = new Set(preparedRows.map((r) => `${r.ranking_source}-${r.team_name}-${r.ranking_division_key}`)).size
-  const uniqueDivisions = new Set(preparedRows.map((r) => r.ranking_division_key)).size
+  const uniqueTeams = new Set(
+    preparedRows.map((r) => `${r.ranking_source}-${r.team_name}-${r.ranking_division_key}`)
+  ).size
+  const uniqueDivisions = new Set(
+    preparedRows.map((r) => r.ranking_division_key).filter(Boolean)
+  ).size
+
+  const debugText = `Source: ${source} | Rankings: ${rankings?.length || 0} | Prepared: ${preparedRows?.length || 0} | Divisions selected: ${divisions.length}`
+
+  console.log('Rankings debug:', {
+    source,
+    rankingsLength: rankings?.length || 0,
+    preparedLength: preparedRows?.length || 0,
+    selectedDivisions: divisions,
+    gender,
+    search,
+    topMode,
+    divisionOptions,
+  })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
@@ -157,6 +213,7 @@ export default function Rankings() {
               borderRadius: 8,
               fontSize: 13,
               fontWeight: 700,
+              cursor: 'pointer',
             }}
           >
             Refresh Rankings
@@ -164,17 +221,42 @@ export default function Rankings() {
         }
       />
 
+      <div style={{ color: '#fff', padding: '12px 24px', fontSize: 12 }}>
+        {debugText}
+      </div>
+
       <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: 14,
+            marginBottom: 20,
+          }}
+        >
           <StatCard label="Source" value={source} accent="#5cb800" />
           <StatCard label="Divisions" value={uniqueDivisions || 0} />
           <StatCard label="Teams" value={uniqueTeams || 0} />
           <StatCard label="Current #1" value={topTeam?.team_name || '—'} accent="#d4a017" />
         </div>
 
-        <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 12, overflow: 'hidden' }}>
+        <div
+          style={{
+            background: '#080c12',
+            border: '1px solid #1a2030',
+            borderRadius: 12,
+            overflow: 'hidden',
+          }}
+        >
           <div style={{ padding: '14px 18px', borderBottom: '1px solid #1a2030' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#c0cce0', letterSpacing: '0.3px' }}>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#c0cce0',
+                letterSpacing: '0.3px',
+              }}
+            >
               {source.toUpperCase()} RANKINGS
             </div>
             <div style={{ fontSize: 11, color: '#4a5568', marginTop: 4 }}>
@@ -188,7 +270,7 @@ export default function Rankings() {
               onSourceChange={setSource}
               divisions={divisions}
               onDivisionsChange={setDivisions}
-              divisionOptions={divisionOptions}
+              divisionOptions={formattedDivisionOptions}
               gender={gender}
               onGenderChange={setGender}
               search={search}
@@ -204,11 +286,15 @@ export default function Rankings() {
 
           {error ? (
             <div style={{ padding: 24, color: '#e05555', fontSize: 13 }}>
-              Error: {error.message}
+              Error: {error.message || String(error)}
             </div>
           ) : loading ? (
             <div style={{ padding: 40, textAlign: 'center', color: '#4a5568', fontSize: 13 }}>
               Loading rankings...
+            </div>
+          ) : pagedRows.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', color: '#6b7a99', fontSize: 13 }}>
+              No teams found for the current filters.
             </div>
           ) : (
             <>
@@ -236,26 +322,61 @@ export default function Rankings() {
                   </thead>
                   <tbody>
                     {pagedRows.map((row) => (
-                      <tr key={`${row.ranking_source}-${row.ranking_division_key}-${row.team_name}-${row.rank}`} style={{ borderBottom: '1px solid #0e1320' }}>
-                        <td style={{ padding: '13px 14px', color: '#d4a017', fontWeight: 700 }}>#{row.rank}</td>
-                        <td style={{ padding: '13px 14px', color: '#d8e0f0', fontWeight: 600 }}>{row.team_name}</td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{row.skill_level || '—'}</td>
-                        <td style={{ padding: '13px 14px', color: '#6b7a99', fontSize: 12 }}>{row.division_label || row.ranking_division_key}</td>
-                        <td style={{ padding: '13px 14px', color: '#5cb800' }}>{row.wins ?? 0}</td>
-                        <td style={{ padding: '13px 14px', color: '#ff9d7a' }}>{row.losses ?? 0}</td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{row.ranking_points ?? 0}</td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{Number(row.opponent_strength || 0).toFixed(2)}</td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{row.points_for ?? 0}</td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{row.points_against ?? 0}</td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{row.point_diff ?? 0}</td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{row.division_team_count ?? 0}</td>
+                      <tr
+                        key={`${row.ranking_source}-${row.ranking_division_key}-${row.team_name}-${row.rank}`}
+                        style={{ borderBottom: '1px solid #0e1320' }}
+                      >
+                        <td style={{ padding: '13px 14px', color: '#d4a017', fontWeight: 700 }}>
+                          #{row.rank}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#d8e0f0', fontWeight: 600 }}>
+                          {row.team_name}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>
+                          {row.skill_level || '—'}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#6b7a99', fontSize: 12 }}>
+                          {row.division_label || row.ranking_division_key}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#5cb800' }}>
+                          {row.wins ?? 0}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#ff9d7a' }}>
+                          {row.losses ?? 0}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>
+                          {row.ranking_points ?? 0}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>
+                          {Number(row.opponent_strength || 0).toFixed(2)}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>
+                          {row.points_for ?? 0}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>
+                          {row.points_against ?? 0}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>
+                          {row.point_diff ?? 0}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>
+                          {row.division_team_count ?? 0}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
 
-              <div style={{ padding: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1a2030' }}>
+              <div
+                style={{
+                  padding: 18,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderTop: '1px solid #1a2030',
+                }}
+              >
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
