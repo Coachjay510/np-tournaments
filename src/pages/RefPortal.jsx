@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
 export default function RefPortal() {
   const [refs, setRefs] = useState([])
+  const [games, setGames] = useState([])
+  const [assignments, setAssignments] = useState([])
   const [loading, setLoading] = useState(true)
+
   const [showRefModal, setShowRefModal] = useState(false)
   const [editingRef, setEditingRef] = useState(null)
 
@@ -21,25 +24,68 @@ export default function RefPortal() {
     is_active: true,
   })
 
+  const [search, setSearch] = useState('')
+  const [selectedGameId, setSelectedGameId] = useState('')
+  const [selectedRefId, setSelectedRefId] = useState('')
+  const [assignmentRole, setAssignmentRole] = useState('Referee')
+  const [assignmentPayRate, setAssignmentPayRate] = useState('')
+  const [assignmentStatus, setAssignmentStatus] = useState('pending')
+  const [savingAssignment, setSavingAssignment] = useState(false)
+
   useEffect(() => {
-    loadRefs()
+    loadAll()
   }, [])
 
-  async function loadRefs() {
+  async function loadAll() {
     setLoading(true)
+    await Promise.all([loadRefs(), loadGames(), loadAssignments()])
+    setLoading(false)
+  }
 
+  async function loadRefs() {
     const { data, error } = await supabase
       .from('bt_referees')
       .select('*')
       .order('last_name', { ascending: true })
 
     if (error) {
-      console.error(error)
-    } else {
-      setRefs(data || [])
+      console.error('Failed to load refs', error)
+      setRefs([])
+      return
     }
 
-    setLoading(false)
+    setRefs(data || [])
+  }
+
+  async function loadGames() {
+    const { data, error } = await supabase
+      .from('scheduled_games')
+      .select('*')
+      .order('game_date', { ascending: true })
+      .limit(300)
+
+    if (error) {
+      console.error('Failed to load games', error)
+      setGames([])
+      return
+    }
+
+    setGames(data || [])
+  }
+
+  async function loadAssignments() {
+    const { data, error } = await supabase
+      .from('bt_ref_assignments')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Failed to load assignments', error)
+      setAssignments([])
+      return
+    }
+
+    setAssignments(data || [])
   }
 
   async function handleSaveRef() {
@@ -75,9 +121,13 @@ export default function RefPortal() {
       return
     }
 
+    resetRefModal()
+    await loadRefs()
+  }
+
+  function resetRefModal() {
     setShowRefModal(false)
     setEditingRef(null)
-
     setRefForm({
       first_name: '',
       last_name: '',
@@ -91,9 +141,116 @@ export default function RefPortal() {
       notes: '',
       is_active: true,
     })
-
-    await loadRefs()
   }
+
+  async function handleCreateAssignment() {
+    if (!selectedGameId || !selectedRefId) return
+
+    setSavingAssignment(true)
+
+    const existing = assignments.find(
+      (a) =>
+        String(a.scheduled_game_id) === String(selectedGameId) &&
+        String(a.referee_id) === String(selectedRefId)
+    )
+
+    if (existing) {
+      console.error('Assignment already exists')
+      setSavingAssignment(false)
+      return
+    }
+
+    const referee = refs.find((r) => String(r.id) === String(selectedRefId))
+
+    const payload = {
+      scheduled_game_id: selectedGameId,
+      referee_id: selectedRefId,
+      role: assignmentRole,
+      pay_rate: assignmentPayRate
+        ? Number(assignmentPayRate)
+        : referee?.pay_rate || null,
+      payment_status: assignmentStatus,
+    }
+
+    const { error } = await supabase
+      .from('bt_ref_assignments')
+      .insert(payload)
+
+    if (error) {
+      console.error('Failed to create assignment', error)
+      setSavingAssignment(false)
+      return
+    }
+
+    setSelectedGameId('')
+    setSelectedRefId('')
+    setAssignmentRole('Referee')
+    setAssignmentPayRate('')
+    setAssignmentStatus('pending')
+
+    await loadAssignments()
+    setSavingAssignment(false)
+  }
+
+  async function handleDeleteAssignment(assignmentId) {
+    const { error } = await supabase
+      .from('bt_ref_assignments')
+      .delete()
+      .eq('id', assignmentId)
+
+    if (error) {
+      console.error('Failed to delete assignment', error)
+      return
+    }
+
+    await loadAssignments()
+  }
+
+  const filteredRefs = useMemo(() => {
+    const q = search.trim().toLowerCase()
+
+    if (!q) return refs
+
+    return refs.filter((ref) => {
+      const fullName = `${ref.first_name || ''} ${ref.last_name || ''}`.toLowerCase()
+      return (
+        fullName.includes(q) ||
+        (ref.email || '').toLowerCase().includes(q) ||
+        (ref.phone || '').toLowerCase().includes(q)
+      )
+    })
+  }, [refs, search])
+
+  const assignmentsWithDetails = useMemo(() => {
+    return assignments.map((assignment) => {
+      const ref = refs.find((r) => String(r.id) === String(assignment.referee_id))
+      const game = games.find((g) => String(g.id) === String(assignment.scheduled_game_id))
+
+      return {
+        ...assignment,
+        ref_name: ref
+          ? `${ref.first_name || ''} ${ref.last_name || ''}`.trim()
+          : 'Unknown Ref',
+        game_label: game
+          ? `${game.game_date || '—'} | ${game.home_team_name || 'TBD'} vs ${game.away_team_name || 'TBD'}`
+          : 'Unknown Game',
+        division_name: game?.division_name || '—',
+        court_name: game?.court_name || '—',
+      }
+    })
+  }, [assignments, refs, games])
+
+  const totalAssignedGames = assignments.length
+  const totalOutstanding = assignmentsWithDetails
+    .filter((a) => a.payment_status !== 'paid')
+    .reduce((sum, a) => sum + Number(a.pay_rate || 0), 0)
+
+  const averageRate = assignments.length
+    ? Math.round(
+        assignments.reduce((sum, a) => sum + Number(a.pay_rate || 0), 0) /
+          assignments.length
+      )
+    : 0
 
   return (
     <div style={pageWrap}>
@@ -101,7 +258,7 @@ export default function RefPortal() {
         <div>
           <h1 style={pageTitle}>Ref Portal</h1>
           <p style={pageSubtitle}>
-            Manage referees, certifications, availability, and pay rates.
+            Manage referees, game assignments, payouts, and availability.
           </p>
         </div>
 
@@ -129,10 +286,95 @@ export default function RefPortal() {
         </button>
       </div>
 
+      <div style={statGrid}>
+        <StatCard label="Refs" value={filteredRefs.length} />
+        <StatCard label="Assignments" value={totalAssignedGames} accent="#4cafef" />
+        <StatCard label="Outstanding Pay" value={`$${totalOutstanding}`} accent="#ff8a65" />
+        <StatCard label="Average Rate" value={`$${averageRate}`} accent="#d4a017" />
+      </div>
+
       <div style={card}>
+        <div style={sectionTitle}>Assign Ref to Game</div>
+
+        <div style={formGrid}>
+          <select
+            value={selectedGameId}
+            onChange={(e) => setSelectedGameId(e.target.value)}
+            style={input}
+          >
+            <option value="">Select Game</option>
+            {games.map((game) => (
+              <option key={game.id} value={game.id}>
+                {`${game.game_date || '—'} | ${game.home_team_name || 'TBD'} vs ${game.away_team_name || 'TBD'}`}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedRefId}
+            onChange={(e) => setSelectedRefId(e.target.value)}
+            style={input}
+          >
+            <option value="">Select Ref</option>
+            {refs
+              .filter((ref) => ref.is_active)
+              .map((ref) => (
+                <option key={ref.id} value={ref.id}>
+                  {`${ref.first_name || ''} ${ref.last_name || ''}`.trim()}
+                </option>
+              ))}
+          </select>
+
+          <input
+            value={assignmentRole}
+            onChange={(e) => setAssignmentRole(e.target.value)}
+            placeholder="Role"
+            style={input}
+          />
+
+          <input
+            value={assignmentPayRate}
+            onChange={(e) => setAssignmentPayRate(e.target.value)}
+            placeholder="Pay Rate"
+            style={input}
+          />
+
+          <select
+            value={assignmentStatus}
+            onChange={(e) => setAssignmentStatus(e.target.value)}
+            style={input}
+          >
+            <option value="pending">Pending</option>
+            <option value="paid">Paid</option>
+          </select>
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          <button
+            onClick={handleCreateAssignment}
+            disabled={savingAssignment}
+            style={primaryButton}
+          >
+            {savingAssignment ? 'Assigning...' : 'Assign Ref'}
+          </button>
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={sectionTitle}>Referees</div>
+
+        <div style={{ marginBottom: 16 }}>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search refs"
+            style={searchInput}
+          />
+        </div>
+
         {loading ? (
           <div style={{ color: '#94a3b8' }}>Loading referees...</div>
-        ) : refs.length === 0 ? (
+        ) : filteredRefs.length === 0 ? (
           <div style={{ color: '#94a3b8' }}>No referees found.</div>
         ) : (
           <table style={table}>
@@ -150,7 +392,7 @@ export default function RefPortal() {
             </thead>
 
             <tbody>
-              {refs.map((ref) => (
+              {filteredRefs.map((ref) => (
                 <tr key={ref.id}>
                   <td style={td}>
                     {ref.first_name} {ref.last_name}
@@ -161,9 +403,7 @@ export default function RefPortal() {
                     {[ref.city, ref.state].filter(Boolean).join(', ') || '—'}
                   </td>
                   <td style={td}>{ref.certification_level || '—'}</td>
-                  <td style={td}>
-                    {ref.pay_rate ? `$${ref.pay_rate}/game` : '—'}
-                  </td>
+                  <td style={td}>{ref.pay_rate ? `$${ref.pay_rate}/game` : '—'}</td>
                   <td style={td}>
                     <span
                       style={{
@@ -205,6 +445,51 @@ export default function RefPortal() {
         )}
       </div>
 
+      <div style={card}>
+        <div style={sectionTitle}>Assignments</div>
+
+        {assignmentsWithDetails.length === 0 ? (
+          <div style={{ color: '#94a3b8' }}>No assignments yet.</div>
+        ) : (
+          <table style={table}>
+            <thead>
+              <tr>
+                <th style={th}>Ref</th>
+                <th style={th}>Game</th>
+                <th style={th}>Division</th>
+                <th style={th}>Court</th>
+                <th style={th}>Role</th>
+                <th style={th}>Pay Rate</th>
+                <th style={th}>Payment</th>
+                <th style={th}>Actions</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {assignmentsWithDetails.map((assignment) => (
+                <tr key={assignment.id}>
+                  <td style={td}>{assignment.ref_name}</td>
+                  <td style={td}>{assignment.game_label}</td>
+                  <td style={td}>{assignment.division_name}</td>
+                  <td style={td}>{assignment.court_name}</td>
+                  <td style={td}>{assignment.role || 'Referee'}</td>
+                  <td style={td}>{assignment.pay_rate ? `$${assignment.pay_rate}` : '—'}</td>
+                  <td style={td}>{assignment.payment_status || 'pending'}</td>
+                  <td style={td}>
+                    <button
+                      onClick={() => handleDeleteAssignment(assignment.id)}
+                      style={dangerButton}
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
       {showRefModal && (
         <div style={modalOverlay}>
           <div style={modalCard}>
@@ -213,10 +498,7 @@ export default function RefPortal() {
                 {editingRef ? 'Edit Referee' : 'Add Referee'}
               </h2>
 
-              <button
-                onClick={() => setShowRefModal(false)}
-                style={closeButton}
-              >
+              <button onClick={resetRefModal} style={closeButton}>
                 ×
               </button>
             </div>
@@ -328,10 +610,7 @@ export default function RefPortal() {
             </div>
 
             <div style={buttonRow}>
-              <button
-                onClick={() => setShowRefModal(false)}
-                style={secondaryButton}
-              >
+              <button onClick={resetRefModal} style={secondaryButton}>
                 Cancel
               </button>
 
@@ -342,6 +621,15 @@ export default function RefPortal() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function StatCard({ label, value, accent = '#5cb800' }) {
+  return (
+    <div style={statCard}>
+      <div style={statLabel}>{label}</div>
+      <div style={{ ...statValue, color: accent }}>{value}</div>
     </div>
   )
 }
@@ -369,11 +657,44 @@ const pageSubtitle = {
   margin: 0,
 }
 
+const statGrid = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(4, 1fr)',
+  gap: 16,
+  marginBottom: 24,
+}
+
+const statCard = {
+  background: '#0f172a',
+  border: '1px solid #1e293b',
+  borderRadius: 16,
+  padding: 18,
+}
+
+const statLabel = {
+  fontSize: 11,
+  color: '#4a5568',
+  textTransform: 'uppercase',
+}
+
+const statValue = {
+  marginTop: 8,
+  fontSize: 28,
+  fontWeight: 700,
+}
+
 const card = {
   background: '#0f172a',
   border: '1px solid #1e293b',
   borderRadius: 16,
   padding: 20,
+  marginBottom: 24,
+}
+
+const sectionTitle = {
+  fontSize: 18,
+  fontWeight: 700,
+  marginBottom: 16,
 }
 
 const table = {
@@ -404,6 +725,15 @@ const input = {
   width: '100%',
 }
 
+const searchInput = {
+  width: 320,
+  background: '#111827',
+  border: '1px solid #374151',
+  borderRadius: 10,
+  padding: 12,
+  color: '#fff',
+}
+
 const textarea = {
   width: '100%',
   minHeight: 90,
@@ -412,6 +742,13 @@ const textarea = {
   border: '1px solid #374151',
   borderRadius: 10,
   padding: 12,
+  marginBottom: 16,
+}
+
+const formGrid = {
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: 12,
   marginBottom: 16,
 }
 
@@ -431,6 +768,15 @@ const secondaryButton = {
   color: '#fff',
   borderRadius: 10,
   padding: '10px 14px',
+  cursor: 'pointer',
+}
+
+const dangerButton = {
+  background: '#7f1d1d',
+  border: 'none',
+  color: '#fff',
+  borderRadius: 10,
+  padding: '8px 12px',
   cursor: 'pointer',
 }
 
@@ -458,13 +804,6 @@ const modalHeader = {
   justifyContent: 'space-between',
   alignItems: 'center',
   marginBottom: 20,
-}
-
-const formGrid = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: 12,
-  marginBottom: 16,
 }
 
 const closeButton = {
