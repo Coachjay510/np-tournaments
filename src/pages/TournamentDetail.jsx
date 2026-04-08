@@ -1,11 +1,36 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import Topbar from '../components/layout/Topbar'
-<div style={{ padding: 12, background: '#2a1111', color: '#fff', marginBottom: 12 }}>
-  TOURNAMENT DETAIL NEW VERSION
-</div>
 import { supabase } from '../supabaseClient'
 import { formatCurrency, statusColor } from '../lib/utils'
+
+const emptyTeamForm = {
+  team_id: '',
+  custom_entry_fee: '',
+  payment_status: 'unpaid',
+  registration_status: 'approved',
+  notes: '',
+}
+
+const emptyConstraintForm = {
+  team_id: '',
+  shared_coach_group: '',
+  preferred_day: '',
+  unavailable_days: [],
+  earliest_start_time: '',
+  latest_start_time: '',
+  min_rest_minutes: 0,
+  notes: '',
+}
+
+const emptyScheduleForm = {
+  day_label: '',
+  event_date: '',
+  gym_open_time: '',
+  gym_close_time: '',
+  slot_minutes: 60,
+  buffer_minutes: 10,
+}
 
 export default function TournamentDetail({ director }) {
   const { id } = useParams()
@@ -15,11 +40,32 @@ export default function TournamentDetail({ director }) {
   const [teams, setTeams] = useState([])
   const [allTeams, setAllTeams] = useState([])
   const [venues, setVenues] = useState([])
+  const [scheduleSettings, setScheduleSettings] = useState([])
+  const [constraints, setConstraints] = useState([])
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [addingTeam, setAddingTeam] = useState(false)
+  const [savingTeam, setSavingTeam] = useState(false)
+  const [savingSchedule, setSavingSchedule] = useState(false)
+  const [savingConstraint, setSavingConstraint] = useState(false)
+  const [copying, setCopying] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  const [showAddTeamModal, setShowAddTeamModal] = useState(false)
+  const [showEditTeamModal, setShowEditTeamModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showCopyModal, setShowCopyModal] = useState(false)
+
+  const [selectedTournamentTeam, setSelectedTournamentTeam] = useState(null)
+  const [teamSearch, setTeamSearch] = useState('')
+  const [copyName, setCopyName] = useState('')
+
+  const [teamForm, setTeamForm] = useState(emptyTeamForm)
+  const [constraintForm, setConstraintForm] = useState(emptyConstraintForm)
+  const [scheduleForm, setScheduleForm] = useState(emptyScheduleForm)
 
   const [form, setForm] = useState({
     name: '',
@@ -39,11 +85,6 @@ export default function TournamentDetail({ director }) {
     is_public: true,
   })
 
-  const [selectedTeamId, setSelectedTeamId] = useState('')
-  const [customFee, setCustomFee] = useState('')
-  const [manualPaymentStatus, setManualPaymentStatus] = useState('unpaid')
-  const [manualRegistrationStatus, setManualRegistrationStatus] = useState('approved')
-
   useEffect(() => {
     loadTournamentDetail()
   }, [id])
@@ -54,68 +95,77 @@ export default function TournamentDetail({ director }) {
     setSuccess('')
 
     const [
-      { data: tournamentData, error: tournamentError },
-      { data: teamData, error: teamError },
-      { data: allTeamData, error: allTeamError },
-      { data: venueData, error: venueError },
+      tournamentRes,
+      teamRes,
+      allTeamsRes,
+      venueRes,
+      scheduleRes,
+      constraintsRes,
     ] = await Promise.all([
       supabase
         .from('tournaments')
         .select('*, divisions(*), venues(*)')
         .eq('id', id)
         .single(),
-
       supabase
         .from('teams')
         .select('*, division:divisions(name)')
         .eq('tournament_id', id)
         .order('registered_at', { ascending: false }),
-
       supabase
         .from('teams')
-        .select('id, team_name, org_name, tournament_id')
+        .select('id, team_name, org_name, tournament_id, age_group, gender')
         .order('team_name', { ascending: true }),
-
       supabase
         .from('venues')
         .select('*')
         .order('name', { ascending: true }),
+      supabase
+        .from('tournament_schedule_settings')
+        .select('*')
+        .eq('tournament_id', id)
+        .order('event_date', { ascending: true }),
+      supabase
+        .from('tournament_team_constraints')
+        .select('*')
+        .eq('tournament_id', id)
+        .order('created_at', { ascending: false }),
     ])
 
-    if (tournamentError) {
-      console.error(tournamentError)
-      setError('Failed to load tournament.')
+    if (tournamentRes.error) {
+      console.error(tournamentRes.error)
+      setError(tournamentRes.error.message || 'Failed to load tournament.')
       setLoading(false)
       return
     }
 
-    if (teamError) console.error(teamError)
-    if (allTeamError) console.error(allTeamError)
-    if (venueError) console.error(venueError)
+    setTournament(tournamentRes.data)
+    setTeams(teamRes.data || [])
+    setAllTeams(allTeamsRes.data || [])
+    setVenues(venueRes.data || [])
+    setScheduleSettings(scheduleRes.data || [])
+    setConstraints(constraintsRes.data || [])
 
-    setTournament(tournamentData)
-    setTeams(teamData || [])
-    setAllTeams(allTeamData || [])
-    setVenues(venueData || [])
+    const t = tournamentRes.data
 
     setForm({
-      name: tournamentData?.name || '',
-      status: tournamentData?.status || 'draft',
-      city: tournamentData?.city || '',
-      state: tournamentData?.state || '',
-      venue_name: tournamentData?.venue_name || '',
-      venue_id: tournamentData?.venue_id || '',
-      start_date: tournamentData?.start_date ? String(tournamentData.start_date).slice(0, 10) : '',
-      end_date: tournamentData?.end_date ? String(tournamentData.end_date).slice(0, 10) : '',
-      max_teams: tournamentData?.max_teams ?? '',
-      registration_fee: tournamentData?.registration_fee ?? '',
-      bracket_format: tournamentData?.bracket_format || '',
-      registration_deadline: tournamentData?.registration_deadline
-        ? String(tournamentData.registration_deadline).slice(0, 10)
+      name: t?.name || '',
+      status: t?.status || 'draft',
+      city: t?.city || '',
+      state: t?.state || '',
+      venue_name: t?.venue_name || '',
+      venue_id: t?.venue_id || '',
+      start_date: t?.start_date ? String(t.start_date).slice(0, 10) : '',
+      end_date: t?.end_date ? String(t.end_date).slice(0, 10) : '',
+      max_teams: t?.max_teams ?? '',
+      registration_fee: t?.registration_fee ?? '',
+      bracket_format: t?.bracket_format || '',
+      registration_deadline: t?.registration_deadline
+        ? String(t.registration_deadline).slice(0, 10)
         : '',
-      require_approval: Boolean(tournamentData?.require_approval),
-      allow_waitlist: Boolean(tournamentData?.allow_waitlist),
-      is_public: tournamentData?.is_public ?? true,
+      require_approval: Boolean(t?.require_approval),
+      allow_waitlist: Boolean(t?.allow_waitlist),
+      is_public: t?.is_public ?? true,
     })
 
     setLoading(false)
@@ -140,7 +190,8 @@ export default function TournamentDetail({ director }) {
       start_date: form.start_date || null,
       end_date: form.end_date || null,
       max_teams: form.max_teams === '' ? null : Number(form.max_teams),
-      registration_fee: form.registration_fee === '' ? null : Number(form.registration_fee),
+      registration_fee:
+        form.registration_fee === '' ? null : Number(form.registration_fee),
       bracket_format: form.bracket_format || null,
       registration_deadline: form.registration_deadline || null,
       require_approval: form.require_approval,
@@ -167,41 +218,94 @@ export default function TournamentDetail({ director }) {
     setSaving(false)
   }
 
-  async function handleAddTeam() {
-    if (!selectedTeamId) return
+  function openAddTeamModal() {
+    setTeamForm(emptyTeamForm)
+    setTeamSearch('')
+    setShowAddTeamModal(true)
+  }
 
-    setAddingTeam(true)
+  function openEditTeamModal(team) {
+    setSelectedTournamentTeam(team)
+    setTeamForm({
+      team_id: team.id,
+      custom_entry_fee: team.custom_entry_fee ?? '',
+      payment_status: team.payment_status || 'unpaid',
+      registration_status: team.registration_status || 'approved',
+      notes: team.team_notes || '',
+    })
+    setShowEditTeamModal(true)
+  }
+
+  async function handleAddTeam() {
+    if (!teamForm.team_id) return
+
+    setSavingTeam(true)
     setError('')
     setSuccess('')
 
     const payload = {
       tournament_id: id,
-      payment_status: manualPaymentStatus,
-      registration_status: manualRegistrationStatus,
-    }
-
-    if (customFee !== '') {
-      payload.custom_entry_fee = Number(customFee)
+      payment_status: teamForm.payment_status,
+      registration_status: teamForm.registration_status,
+      team_notes: teamForm.notes || null,
+      custom_entry_fee:
+        teamForm.custom_entry_fee === ''
+          ? null
+          : Number(teamForm.custom_entry_fee),
     }
 
     const { error } = await supabase
       .from('teams')
       .update(payload)
-      .eq('id', selectedTeamId)
+      .eq('id', teamForm.team_id)
 
     if (error) {
       console.error(error)
       setError(error.message || 'Failed to add team.')
-      setAddingTeam(false)
+      setSavingTeam(false)
       return
     }
 
-    setSelectedTeamId('')
-    setCustomFee('')
-    setManualPaymentStatus('unpaid')
-    setManualRegistrationStatus('approved')
+    setShowAddTeamModal(false)
+    setTeamForm(emptyTeamForm)
     setSuccess('Team added to tournament.')
-    setAddingTeam(false)
+    setSavingTeam(false)
+    loadTournamentDetail()
+  }
+
+  async function handleUpdateTeamAssignment() {
+    if (!selectedTournamentTeam?.id) return
+
+    setSavingTeam(true)
+    setError('')
+    setSuccess('')
+
+    const payload = {
+      payment_status: teamForm.payment_status,
+      registration_status: teamForm.registration_status,
+      team_notes: teamForm.notes || null,
+      custom_entry_fee:
+        teamForm.custom_entry_fee === ''
+          ? null
+          : Number(teamForm.custom_entry_fee),
+    }
+
+    const { error } = await supabase
+      .from('teams')
+      .update(payload)
+      .eq('id', selectedTournamentTeam.id)
+
+    if (error) {
+      console.error(error)
+      setError(error.message || 'Failed to update team assignment.')
+      setSavingTeam(false)
+      return
+    }
+
+    setShowEditTeamModal(false)
+    setSelectedTournamentTeam(null)
+    setSuccess('Tournament team updated.')
+    setSavingTeam(false)
     loadTournamentDetail()
   }
 
@@ -211,6 +315,7 @@ export default function TournamentDetail({ director }) {
       .update({
         tournament_id: null,
         custom_entry_fee: null,
+        team_notes: null,
       })
       .eq('id', teamId)
 
@@ -224,25 +329,193 @@ export default function TournamentDetail({ director }) {
     loadTournamentDetail()
   }
 
+  async function handleDeleteTournament() {
+    setDeleting(true)
+    setError('')
+    setSuccess('')
+
+    const { error } = await supabase
+      .from('tournaments')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      console.error(error)
+      setError(error.message || 'Failed to delete tournament.')
+      setDeleting(false)
+      return
+    }
+
+    navigate('/tournaments')
+  }
+
+  async function handleCopyTournament() {
+    setCopying(true)
+    setError('')
+    setSuccess('')
+
+    const payload = {
+      ...tournament,
+      name: copyName || `${tournament.name} Copy`,
+      copied_from_tournament_id: tournament.id,
+    }
+
+    delete payload.id
+    delete payload.created_at
+    delete payload.updated_at
+    delete payload.divisions
+    delete payload.venues
+
+    const { data, error } = await supabase
+      .from('tournaments')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error) {
+      console.error(error)
+      setError(error.message || 'Failed to copy tournament.')
+      setCopying(false)
+      return
+    }
+
+    setShowCopyModal(false)
+    setCopyName('')
+    setSuccess('Tournament copied.')
+    setCopying(false)
+    navigate(`/tournaments/${data.id}`)
+  }
+
+  async function handleAddScheduleSetting() {
+    setSavingSchedule(true)
+    setError('')
+    setSuccess('')
+
+    const payload = {
+      tournament_id: id,
+      day_label: scheduleForm.day_label,
+      event_date: scheduleForm.event_date || null,
+      gym_open_time: scheduleForm.gym_open_time || null,
+      gym_close_time: scheduleForm.gym_close_time || null,
+      slot_minutes: Number(scheduleForm.slot_minutes || 60),
+      buffer_minutes: Number(scheduleForm.buffer_minutes || 10),
+    }
+
+    const { error } = await supabase
+      .from('tournament_schedule_settings')
+      .insert(payload)
+
+    if (error) {
+      console.error(error)
+      setError(error.message || 'Failed to add schedule setting.')
+      setSavingSchedule(false)
+      return
+    }
+
+    setScheduleForm(emptyScheduleForm)
+    setSuccess('Schedule setting added.')
+    setSavingSchedule(false)
+    loadTournamentDetail()
+  }
+
+  async function handleDeleteScheduleSetting(settingId) {
+    const { error } = await supabase
+      .from('tournament_schedule_settings')
+      .delete()
+      .eq('id', settingId)
+
+    if (error) {
+      console.error(error)
+      setError(error.message || 'Failed to remove schedule setting.')
+      return
+    }
+
+    setSuccess('Schedule setting removed.')
+    loadTournamentDetail()
+  }
+
+  async function handleAddConstraint() {
+    if (!constraintForm.team_id) return
+
+    setSavingConstraint(true)
+    setError('')
+    setSuccess('')
+
+    const payload = {
+      tournament_id: id,
+      team_id: constraintForm.team_id,
+      shared_coach_group: constraintForm.shared_coach_group || null,
+      preferred_day: constraintForm.preferred_day || null,
+      unavailable_days:
+        constraintForm.unavailable_days.length > 0
+          ? constraintForm.unavailable_days
+          : null,
+      earliest_start_time: constraintForm.earliest_start_time || null,
+      latest_start_time: constraintForm.latest_start_time || null,
+      min_rest_minutes: Number(constraintForm.min_rest_minutes || 0),
+      notes: constraintForm.notes || null,
+    }
+
+    const { error } = await supabase
+      .from('tournament_team_constraints')
+      .insert(payload)
+
+    if (error) {
+      console.error(error)
+      setError(error.message || 'Failed to add constraint.')
+      setSavingConstraint(false)
+      return
+    }
+
+    setConstraintForm(emptyConstraintForm)
+    setSuccess('Constraint added.')
+    setSavingConstraint(false)
+    loadTournamentDetail()
+  }
+
+  async function handleDeleteConstraint(constraintId) {
+    const { error } = await supabase
+      .from('tournament_team_constraints')
+      .delete()
+      .eq('id', constraintId)
+
+    if (error) {
+      console.error(error)
+      setError(error.message || 'Failed to remove constraint.')
+      return
+    }
+
+    setSuccess('Constraint removed.')
+    loadTournamentDetail()
+  }
+
   const availableTeams = useMemo(() => {
     const existingIds = new Set(teams.map((team) => String(team.id)))
     return allTeams.filter((team) => !existingIds.has(String(team.id)))
   }, [allTeams, teams])
 
+  const filteredAvailableTeams = useMemo(() => {
+    const q = teamSearch.trim().toLowerCase()
+    if (!q) return availableTeams
+
+    return availableTeams.filter((team) => {
+      const name = (team.team_name || '').toLowerCase()
+      const org = (team.org_name || '').toLowerCase()
+      return name.includes(q) || org.includes(q)
+    })
+  }, [availableTeams, teamSearch])
+
+  const constraintTeamName = (teamId) => {
+    const team = allTeams.find((t) => String(t.id) === String(teamId))
+    return team?.team_name || 'Unknown Team'
+  }
+
   if (loading) {
-    return (
-      <div style={{ padding: 40, color: '#4a5568', fontSize: 13 }}>
-        Loading...
-      </div>
-    )
+    return <div style={{ padding: 40, color: '#4a5568', fontSize: 13 }}>Loading...</div>
   }
 
   if (!tournament) {
-    return (
-      <div style={{ padding: 40, color: '#e05555', fontSize: 13 }}>
-        Tournament not found
-      </div>
-    )
+    return <div style={{ padding: 40, color: '#e05555', fontSize: 13 }}>Tournament not found</div>
   }
 
   const c = statusColor(tournament.status)
@@ -255,12 +528,18 @@ export default function TournamentDetail({ director }) {
         title={tournament.name?.toUpperCase() || 'TOURNAMENT'}
         actions={
           <>
-            <button
-              onClick={() => navigate('/registrations')}
-              style={ghostButton}
-            >
+            <button onClick={() => navigate('/registrations')} style={ghostButton}>
               Registrations {pending > 0 && `(${pending})`}
             </button>
+
+            <button onClick={() => setShowCopyModal(true)} style={ghostButton}>
+              Copy Tournament
+            </button>
+
+            <button onClick={() => setShowDeleteModal(true)} style={dangerButton}>
+              Delete Tournament
+            </button>
+
             <span
               style={{
                 fontSize: 10,
@@ -300,75 +579,38 @@ export default function TournamentDetail({ director }) {
           <div style={panelHeader}>TOURNAMENT SETTINGS</div>
 
           <div style={formGrid}>
-            <div>
-              <label style={label}>Tournament Name</label>
-              <input
-                value={form.name}
-                onChange={(e) => updateField('name', e.target.value)}
-                style={input}
-              />
-            </div>
+            <Field label="Tournament Name">
+              <input value={form.name} onChange={(e) => updateField('name', e.target.value)} style={input} />
+            </Field>
 
-            <div>
-              <label style={label}>Status</label>
-              <select
-                value={form.status}
-                onChange={(e) => updateField('status', e.target.value)}
-                style={input}
-              >
+            <Field label="Status">
+              <select value={form.status} onChange={(e) => updateField('status', e.target.value)} style={input}>
                 <option value="draft">Draft</option>
                 <option value="registration_open">Registration Open</option>
                 <option value="closed">Closed</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
-            </div>
+            </Field>
 
-            <div>
-              <label style={label}>Start Date</label>
-              <input
-                type="date"
-                value={form.start_date}
-                onChange={(e) => updateField('start_date', e.target.value)}
-                style={input}
-              />
-            </div>
+            <Field label="Start Date">
+              <input type="date" value={form.start_date} onChange={(e) => updateField('start_date', e.target.value)} style={input} />
+            </Field>
 
-            <div>
-              <label style={label}>End Date</label>
-              <input
-                type="date"
-                value={form.end_date}
-                onChange={(e) => updateField('end_date', e.target.value)}
-                style={input}
-              />
-            </div>
+            <Field label="End Date">
+              <input type="date" value={form.end_date} onChange={(e) => updateField('end_date', e.target.value)} style={input} />
+            </Field>
 
-            <div>
-              <label style={label}>City</label>
-              <input
-                value={form.city}
-                onChange={(e) => updateField('city', e.target.value)}
-                style={input}
-              />
-            </div>
+            <Field label="City">
+              <input value={form.city} onChange={(e) => updateField('city', e.target.value)} style={input} />
+            </Field>
 
-            <div>
-              <label style={label}>State</label>
-              <input
-                value={form.state}
-                onChange={(e) => updateField('state', e.target.value)}
-                style={input}
-              />
-            </div>
+            <Field label="State">
+              <input value={form.state} onChange={(e) => updateField('state', e.target.value)} style={input} />
+            </Field>
 
-            <div>
-              <label style={label}>Venue</label>
-              <select
-                value={form.venue_id}
-                onChange={(e) => updateField('venue_id', e.target.value)}
-                style={input}
-              >
+            <Field label="Venue">
+              <select value={form.venue_id} onChange={(e) => updateField('venue_id', e.target.value)} style={input}>
                 <option value="">Select venue</option>
                 {venues.map((venue) => (
                   <option key={venue.id} value={venue.id}>
@@ -376,218 +618,545 @@ export default function TournamentDetail({ director }) {
                   </option>
                 ))}
               </select>
-            </div>
+            </Field>
 
-            <div>
-              <label style={label}>Venue Name (fallback)</label>
-              <input
-                value={form.venue_name}
-                onChange={(e) => updateField('venue_name', e.target.value)}
-                style={input}
-              />
-            </div>
+            <Field label="Venue Name (fallback)">
+              <input value={form.venue_name} onChange={(e) => updateField('venue_name', e.target.value)} style={input} />
+            </Field>
 
-            <div>
-              <label style={label}>Max Teams</label>
-              <input
-                type="number"
-                value={form.max_teams}
-                onChange={(e) => updateField('max_teams', e.target.value)}
-                style={input}
-              />
-            </div>
+            <Field label="Max Teams">
+              <input type="number" value={form.max_teams} onChange={(e) => updateField('max_teams', e.target.value)} style={input} />
+            </Field>
 
-            <div>
-              <label style={label}>Registration Fee</label>
-              <input
-                type="number"
-                value={form.registration_fee}
-                onChange={(e) => updateField('registration_fee', e.target.value)}
-                style={input}
-              />
-            </div>
+            <Field label="Registration Fee">
+              <input type="number" value={form.registration_fee} onChange={(e) => updateField('registration_fee', e.target.value)} style={input} />
+            </Field>
 
-            <div>
-              <label style={label}>Bracket Format</label>
-              <input
-                value={form.bracket_format}
-                onChange={(e) => updateField('bracket_format', e.target.value)}
-                style={input}
-                placeholder="single elimination / pool play + bracket"
-              />
-            </div>
+            <Field label="Bracket Format">
+              <input value={form.bracket_format} onChange={(e) => updateField('bracket_format', e.target.value)} style={input} />
+            </Field>
 
-            <div>
-              <label style={label}>Registration Deadline</label>
+            <Field label="Registration Deadline">
               <input
                 type="date"
                 value={form.registration_deadline}
                 onChange={(e) => updateField('registration_deadline', e.target.value)}
                 style={input}
               />
-            </div>
+            </Field>
           </div>
 
           <div style={{ display: 'flex', gap: 18, marginTop: 18, flexWrap: 'wrap' }}>
-            <label style={checkboxLabel}>
-              <input
-                type="checkbox"
-                checked={form.require_approval}
-                onChange={(e) => updateField('require_approval', e.target.checked)}
-              />
-              Require Approval
-            </label>
-
-            <label style={checkboxLabel}>
-              <input
-                type="checkbox"
-                checked={form.allow_waitlist}
-                onChange={(e) => updateField('allow_waitlist', e.target.checked)}
-              />
-              Allow Waitlist
-            </label>
-
-            <label style={checkboxLabel}>
-              <input
-                type="checkbox"
-                checked={form.is_public}
-                onChange={(e) => updateField('is_public', e.target.checked)}
-              />
-              Public Tournament
-            </label>
+            <Checkbox
+              checked={form.require_approval}
+              onChange={(v) => updateField('require_approval', v)}
+              label="Require Approval"
+            />
+            <Checkbox
+              checked={form.allow_waitlist}
+              onChange={(v) => updateField('allow_waitlist', v)}
+              label="Allow Waitlist"
+            />
+            <Checkbox
+              checked={form.is_public}
+              onChange={(v) => updateField('is_public', v)}
+              label="Public Tournament"
+            />
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <button
-              onClick={handleSaveTournament}
-              disabled={saving}
-              style={primaryButton}
-            >
+            <button onClick={handleSaveTournament} disabled={saving} style={primaryButton}>
               {saving ? 'Saving...' : 'Save Tournament'}
             </button>
           </div>
         </div>
 
         <div style={panel}>
-          <div style={panelHeader}>ADD TEAM TO TOURNAMENT</div>
+          <div style={{ ...panelHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>TOURNAMENT TEAMS</span>
+            <button onClick={openAddTeamModal} style={primaryButton}>
+              Add Team
+            </button>
+          </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 12 }}>
+          {teams.length === 0 ? (
+            <div style={{ padding: 20, color: '#6b7a99' }}>No teams registered yet</div>
+          ) : (
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>Team</th>
+                  <th style={th}>Org</th>
+                  <th style={th}>Division</th>
+                  <th style={th}>Registration</th>
+                  <th style={th}>Payment</th>
+                  <th style={th}>Custom Fee</th>
+                  <th style={th}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teams.map((team) => {
+                  const rc = statusColor(
+                    team.registration_status === 'approved'
+                      ? 'registration_open'
+                      : team.registration_status === 'rejected'
+                        ? 'cancelled'
+                        : 'draft'
+                  )
+
+                  return (
+                    <tr key={team.id}>
+                      <td style={td}>{team.team_name}</td>
+                      <td style={td}>{team.org_name || '—'}</td>
+                      <td style={td}>{team.division?.name || 'No division'}</td>
+                      <td style={td}>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            padding: '3px 8px',
+                            borderRadius: 20,
+                            fontWeight: 600,
+                            background: rc.bg,
+                            color: rc.color,
+                            border: `1px solid ${rc.border}`,
+                          }}
+                        >
+                          {team.registration_status}
+                        </span>
+                      </td>
+                      <td style={td}>{team.payment_status || 'unpaid'}</td>
+                      <td style={td}>
+                        {team.custom_entry_fee != null
+                          ? formatCurrency(team.custom_entry_fee)
+                          : '—'}
+                      </td>
+                      <td style={td}>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button onClick={() => openEditTeamModal(team)} style={ghostButtonSmall}>
+                            Edit
+                          </button>
+                          <button onClick={() => handleRemoveTeam(team.id)} style={dangerButtonSmall}>
+                            Remove
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div style={panel}>
+          <div style={panelHeader}>SCHEDULING SETTINGS</div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 12, marginBottom: 16 }}>
+            <input
+              placeholder="Day Label"
+              value={scheduleForm.day_label}
+              onChange={(e) => setScheduleForm((p) => ({ ...p, day_label: e.target.value }))}
+              style={input}
+            />
+            <input
+              type="date"
+              value={scheduleForm.event_date}
+              onChange={(e) => setScheduleForm((p) => ({ ...p, event_date: e.target.value }))}
+              style={input}
+            />
+            <input
+              type="time"
+              value={scheduleForm.gym_open_time}
+              onChange={(e) => setScheduleForm((p) => ({ ...p, gym_open_time: e.target.value }))}
+              style={input}
+            />
+            <input
+              type="time"
+              value={scheduleForm.gym_close_time}
+              onChange={(e) => setScheduleForm((p) => ({ ...p, gym_close_time: e.target.value }))}
+              style={input}
+            />
+            <input
+              type="number"
+              placeholder="Slot Minutes"
+              value={scheduleForm.slot_minutes}
+              onChange={(e) => setScheduleForm((p) => ({ ...p, slot_minutes: e.target.value }))}
+              style={input}
+            />
+            <input
+              type="number"
+              placeholder="Buffer"
+              value={scheduleForm.buffer_minutes}
+              onChange={(e) => setScheduleForm((p) => ({ ...p, buffer_minutes: e.target.value }))}
+              style={input}
+            />
+          </div>
+
+          <button onClick={handleAddScheduleSetting} disabled={savingSchedule} style={primaryButton}>
+            {savingSchedule ? 'Saving...' : 'Add Schedule Rule'}
+          </button>
+
+          <div style={{ marginTop: 16 }}>
+            {scheduleSettings.length === 0 ? (
+              <div style={{ color: '#6b7a99' }}>No schedule settings added yet.</div>
+            ) : (
+              <table style={table}>
+                <thead>
+                  <tr>
+                    <th style={th}>Day</th>
+                    <th style={th}>Date</th>
+                    <th style={th}>Open</th>
+                    <th style={th}>Close</th>
+                    <th style={th}>Slot</th>
+                    <th style={th}>Buffer</th>
+                    <th style={th}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scheduleSettings.map((setting) => (
+                    <tr key={setting.id}>
+                      <td style={td}>{setting.day_label}</td>
+                      <td style={td}>{setting.event_date || '—'}</td>
+                      <td style={td}>{setting.gym_open_time || '—'}</td>
+                      <td style={td}>{setting.gym_close_time || '—'}</td>
+                      <td style={td}>{setting.slot_minutes} min</td>
+                      <td style={td}>{setting.buffer_minutes} min</td>
+                      <td style={td}>
+                        <button onClick={() => handleDeleteScheduleSetting(setting.id)} style={dangerButtonSmall}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        <div style={panel}>
+          <div style={panelHeader}>TEAM CONSTRAINTS / CONFLICTS</div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
             <select
-              value={selectedTeamId}
-              onChange={(e) => setSelectedTeamId(e.target.value)}
+              value={constraintForm.team_id}
+              onChange={(e) => setConstraintForm((p) => ({ ...p, team_id: e.target.value }))}
               style={input}
             >
               <option value="">Select Team</option>
-              {availableTeams.map((team) => (
+              {teams.map((team) => (
                 <option key={team.id} value={team.id}>
-                  {team.team_name} - {team.org_name || 'No Org'}
+                  {team.team_name}
                 </option>
               ))}
             </select>
 
             <input
-              value={customFee}
-              onChange={(e) => setCustomFee(e.target.value)}
-              placeholder="Custom Fee"
+              placeholder="Shared Coach Group"
+              value={constraintForm.shared_coach_group}
+              onChange={(e) => setConstraintForm((p) => ({ ...p, shared_coach_group: e.target.value }))}
               style={input}
             />
 
             <select
-              value={manualPaymentStatus}
-              onChange={(e) => setManualPaymentStatus(e.target.value)}
+              value={constraintForm.preferred_day}
+              onChange={(e) => setConstraintForm((p) => ({ ...p, preferred_day: e.target.value }))}
+              style={input}
+            >
+              <option value="">Preferred Day</option>
+              <option value="Saturday">Saturday</option>
+              <option value="Sunday">Sunday</option>
+            </select>
+
+            <input
+              placeholder="Unavailable Days (comma separated)"
+              value={constraintForm.unavailable_days.join(', ')}
+              onChange={(e) =>
+                setConstraintForm((p) => ({
+                  ...p,
+                  unavailable_days: e.target.value
+                    .split(',')
+                    .map((v) => v.trim())
+                    .filter(Boolean),
+                }))
+              }
+              style={input}
+            />
+
+            <input
+              type="time"
+              value={constraintForm.earliest_start_time}
+              onChange={(e) => setConstraintForm((p) => ({ ...p, earliest_start_time: e.target.value }))}
+              style={input}
+            />
+
+            <input
+              type="time"
+              value={constraintForm.latest_start_time}
+              onChange={(e) => setConstraintForm((p) => ({ ...p, latest_start_time: e.target.value }))}
+              style={input}
+            />
+
+            <input
+              type="number"
+              placeholder="Min Rest Minutes"
+              value={constraintForm.min_rest_minutes}
+              onChange={(e) => setConstraintForm((p) => ({ ...p, min_rest_minutes: e.target.value }))}
+              style={input}
+            />
+
+            <input
+              placeholder="Notes"
+              value={constraintForm.notes}
+              onChange={(e) => setConstraintForm((p) => ({ ...p, notes: e.target.value }))}
+              style={input}
+            />
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <button onClick={handleAddConstraint} disabled={savingConstraint} style={primaryButton}>
+              {savingConstraint ? 'Saving...' : 'Add Constraint'}
+            </button>
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            {constraints.length === 0 ? (
+              <div style={{ color: '#6b7a99' }}>No constraints added yet.</div>
+            ) : (
+              <table style={table}>
+                <thead>
+                  <tr>
+                    <th style={th}>Team</th>
+                    <th style={th}>Coach Group</th>
+                    <th style={th}>Preferred Day</th>
+                    <th style={th}>Unavailable</th>
+                    <th style={th}>Time Window</th>
+                    <th style={th}>Rest</th>
+                    <th style={th}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {constraints.map((constraint) => (
+                    <tr key={constraint.id}>
+                      <td style={td}>{constraintTeamName(constraint.team_id)}</td>
+                      <td style={td}>{constraint.shared_coach_group || '—'}</td>
+                      <td style={td}>{constraint.preferred_day || '—'}</td>
+                      <td style={td}>
+                        {constraint.unavailable_days?.length
+                          ? constraint.unavailable_days.join(', ')
+                          : '—'}
+                      </td>
+                      <td style={td}>
+                        {[constraint.earliest_start_time, constraint.latest_start_time]
+                          .filter(Boolean)
+                          .join(' - ') || '—'}
+                      </td>
+                      <td style={td}>{constraint.min_rest_minutes || 0} min</td>
+                      <td style={td}>
+                        <button onClick={() => handleDeleteConstraint(constraint.id)} style={dangerButtonSmall}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {showAddTeamModal && (
+        <Modal title="Add Team To Tournament" onClose={() => setShowAddTeamModal(false)}>
+          <input
+            placeholder="Search teams or orgs"
+            value={teamSearch}
+            onChange={(e) => setTeamSearch(e.target.value)}
+            style={{ ...input, marginBottom: 12 }}
+          />
+
+          <div style={pickerList}>
+            {filteredAvailableTeams.map((team) => (
+              <button
+                key={team.id}
+                onClick={() => setTeamForm((p) => ({ ...p, team_id: team.id }))}
+                style={{
+                  ...pickerItem,
+                  borderColor:
+                    String(teamForm.team_id) === String(team.id)
+                      ? '#5cb800'
+                      : '#1a2030',
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>{team.team_name}</div>
+                <div style={{ fontSize: 12, color: '#6b7a99' }}>
+                  {team.org_name || 'No Org'} · {team.age_group || '—'} · {team.gender || '—'}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 16 }}>
+            <input
+              placeholder="Custom Fee"
+              value={teamForm.custom_entry_fee}
+              onChange={(e) => setTeamForm((p) => ({ ...p, custom_entry_fee: e.target.value }))}
+              style={input}
+            />
+            <select
+              value={teamForm.payment_status}
+              onChange={(e) => setTeamForm((p) => ({ ...p, payment_status: e.target.value }))}
               style={input}
             >
               <option value="unpaid">Unpaid</option>
               <option value="paid">Paid</option>
               <option value="partial">Partial</option>
             </select>
-
             <select
-              value={manualRegistrationStatus}
-              onChange={(e) => setManualRegistrationStatus(e.target.value)}
+              value={teamForm.registration_status}
+              onChange={(e) => setTeamForm((p) => ({ ...p, registration_status: e.target.value }))}
               style={input}
             >
               <option value="approved">Approved</option>
               <option value="pending">Pending</option>
               <option value="rejected">Rejected</option>
             </select>
+          </div>
 
-            <button
-              onClick={handleAddTeam}
-              disabled={addingTeam}
-              style={primaryButton}
-            >
-              {addingTeam ? 'Adding...' : 'Add Team'}
+          <textarea
+            placeholder="Notes"
+            value={teamForm.notes}
+            onChange={(e) => setTeamForm((p) => ({ ...p, notes: e.target.value }))}
+            style={textarea}
+          />
+
+          <div style={modalActions}>
+            <button onClick={() => setShowAddTeamModal(false)} style={ghostButton}>
+              Cancel
+            </button>
+            <button onClick={handleAddTeam} disabled={savingTeam} style={primaryButton}>
+              {savingTeam ? 'Adding...' : 'Add Team'}
             </button>
           </div>
+        </Modal>
+      )}
+
+      {showEditTeamModal && (
+        <Modal title="Edit Tournament Team" onClose={() => setShowEditTeamModal(false)}>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
+            {selectedTournamentTeam?.team_name}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+            <input
+              placeholder="Custom Fee"
+              value={teamForm.custom_entry_fee}
+              onChange={(e) => setTeamForm((p) => ({ ...p, custom_entry_fee: e.target.value }))}
+              style={input}
+            />
+            <select
+              value={teamForm.payment_status}
+              onChange={(e) => setTeamForm((p) => ({ ...p, payment_status: e.target.value }))}
+              style={input}
+            >
+              <option value="unpaid">Unpaid</option>
+              <option value="paid">Paid</option>
+              <option value="partial">Partial</option>
+            </select>
+            <select
+              value={teamForm.registration_status}
+              onChange={(e) => setTeamForm((p) => ({ ...p, registration_status: e.target.value }))}
+              style={input}
+            >
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+
+          <textarea
+            placeholder="Notes"
+            value={teamForm.notes}
+            onChange={(e) => setTeamForm((p) => ({ ...p, notes: e.target.value }))}
+            style={textarea}
+          />
+
+          <div style={modalActions}>
+            <button onClick={() => setShowEditTeamModal(false)} style={ghostButton}>
+              Cancel
+            </button>
+            <button onClick={handleUpdateTeamAssignment} disabled={savingTeam} style={primaryButton}>
+              {savingTeam ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showDeleteModal && (
+        <Modal title="Delete Tournament" onClose={() => setShowDeleteModal(false)}>
+          <div style={{ color: '#ffb4b4', marginBottom: 16 }}>
+            This will permanently delete this tournament.
+          </div>
+          <div style={modalActions}>
+            <button onClick={() => setShowDeleteModal(false)} style={ghostButton}>
+              Cancel
+            </button>
+            <button onClick={handleDeleteTournament} disabled={deleting} style={dangerButton}>
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showCopyModal && (
+        <Modal title="Copy Tournament" onClose={() => setShowCopyModal(false)}>
+          <input
+            placeholder="New tournament name"
+            value={copyName}
+            onChange={(e) => setCopyName(e.target.value)}
+            style={input}
+          />
+          <div style={modalActions}>
+            <button onClick={() => setShowCopyModal(false)} style={ghostButton}>
+              Cancel
+            </button>
+            <button onClick={handleCopyTournament} disabled={copying} style={primaryButton}>
+              {copying ? 'Copying...' : 'Copy Tournament'}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      {children}
+    </div>
+  )
+}
+
+function Checkbox({ checked, onChange, label }) {
+  return (
+    <label style={checkboxLabel}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      {label}
+    </label>
+  )
+}
+
+function Modal({ title, children, onClose }) {
+  return (
+    <div style={modalOverlay}>
+      <div style={modalCard}>
+        <div style={modalHeader}>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{title}</div>
+          <button onClick={onClose} style={closeButton}>×</button>
         </div>
-
-        <div style={panel}>
-          <div style={panelHeader}>REGISTERED TEAMS</div>
-
-          {teams.length === 0 ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#4a5568', fontSize: 13 }}>
-              No teams registered yet
-            </div>
-          ) : (
-            teams.map((team) => {
-              const rc = statusColor(
-                team.registration_status === 'approved'
-                  ? 'registration_open'
-                  : team.registration_status === 'rejected'
-                    ? 'cancelled'
-                    : 'draft'
-              )
-
-              return (
-                <div key={team.id} style={teamRow}>
-                  <div style={teamBadge}>
-                    {team.team_name?.slice(0, 2).toUpperCase()}
-                  </div>
-
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#d8e0f0' }}>
-                      {team.team_name}
-                    </div>
-                    <div style={{ fontSize: 11, color: '#4a5568', marginTop: 2 }}>
-                      {team.org_name} · {team.division?.name || 'No division'}
-                    </div>
-                  </div>
-
-                  <span
-                    style={{
-                      fontSize: 10,
-                      padding: '3px 8px',
-                      borderRadius: 20,
-                      fontWeight: 600,
-                      background: rc.bg,
-                      color: rc.color,
-                      border: `1px solid ${rc.border}`,
-                    }}
-                  >
-                    {team.registration_status}
-                  </span>
-
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: team.payment_status === 'paid' ? '#5cb800' : '#d4a017',
-                    }}
-                  >
-                    {team.payment_status === 'paid' ? '✓ Paid' : '⚠ Unpaid'}
-                  </span>
-
-                  <button
-                    onClick={() => handleRemoveTeam(team.id)}
-                    style={dangerButton}
-                  >
-                    Remove
-                  </button>
-                </div>
-              )
-            })
-          )}
-        </div>
+        {children}
       </div>
     </div>
   )
@@ -600,6 +1169,17 @@ const ghostButton = {
   padding: '8px 14px',
   borderRadius: 8,
   fontSize: 13,
+  cursor: 'pointer',
+}
+
+const ghostButtonSmall = {
+  background: 'transparent',
+  color: '#d8e0f0',
+  border: '1px solid #1a2030',
+  padding: '6px 10px',
+  borderRadius: 8,
+  fontSize: 12,
+  cursor: 'pointer',
 }
 
 const statCard = {
@@ -644,7 +1224,7 @@ const formGrid = {
   gap: 12,
 }
 
-const label = {
+const labelStyle = {
   display: 'block',
   marginBottom: 6,
   fontSize: 12,
@@ -658,6 +1238,17 @@ const input = {
   border: '1px solid #1a2030',
   borderRadius: 8,
   padding: '12px 14px',
+}
+
+const textarea = {
+  width: '100%',
+  minHeight: 90,
+  background: '#04060a',
+  color: '#fff',
+  border: '1px solid #1a2030',
+  borderRadius: 8,
+  padding: '12px 14px',
+  marginTop: 12,
 }
 
 const checkboxLabel = {
@@ -687,26 +1278,35 @@ const dangerButton = {
   cursor: 'pointer',
 }
 
-const teamRow = {
-  display: 'flex',
-  alignItems: 'center',
-  padding: '12px 0',
-  borderBottom: '1px solid #0e1320',
-  gap: 12,
+const dangerButtonSmall = {
+  background: '#2a1111',
+  color: '#ff8f8f',
+  border: '1px solid #5a2323',
+  borderRadius: 8,
+  padding: '6px 10px',
+  cursor: 'pointer',
+  fontSize: 12,
 }
 
-const teamBadge = {
-  width: 36,
-  height: 36,
-  borderRadius: 8,
-  background: '#5cb800',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: 12,
-  fontWeight: 700,
-  color: '#04060a',
-  flexShrink: 0,
+const table = {
+  width: '100%',
+  borderCollapse: 'collapse',
+}
+
+const th = {
+  textAlign: 'left',
+  padding: '12px 14px',
+  fontSize: 11,
+  color: '#6b7a99',
+  textTransform: 'uppercase',
+  borderBottom: '1px solid #1a2030',
+}
+
+const td = {
+  padding: '12px 14px',
+  color: '#d8e0f0',
+  fontSize: 13,
+  borderBottom: '1px solid #0e1320',
 }
 
 const errorBanner = {
@@ -725,4 +1325,62 @@ const successBanner = {
   padding: 12,
   borderRadius: 10,
   marginBottom: 16,
+}
+
+const modalOverlay = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(0,0,0,0.7)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 1000,
+}
+
+const modalCard = {
+  width: 860,
+  maxWidth: '95%',
+  background: '#080c12',
+  border: '1px solid #1a2030',
+  borderRadius: 14,
+  padding: 24,
+}
+
+const modalHeader = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 16,
+}
+
+const closeButton = {
+  background: 'transparent',
+  color: '#fff',
+  border: 'none',
+  fontSize: 24,
+  cursor: 'pointer',
+}
+
+const modalActions = {
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: 10,
+  marginTop: 16,
+}
+
+const pickerList = {
+  maxHeight: 280,
+  overflowY: 'auto',
+  display: 'grid',
+  gap: 8,
+}
+
+const pickerItem = {
+  background: '#04060a',
+  border: '1px solid #1a2030',
+  borderRadius: 10,
+  padding: 12,
+  textAlign: 'left',
+  color: '#fff',
+  cursor: 'pointer',
 }
