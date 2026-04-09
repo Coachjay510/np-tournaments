@@ -81,6 +81,7 @@ export default function TournamentDetail({ director }) {
 
   useEffect(() => {
     loadTournamentDetail()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   async function loadTournamentDetail() {
@@ -264,7 +265,7 @@ export default function TournamentDetail({ director }) {
         : teamForm.preferred_day || null,
       unavailable_days: teamForm.no_conflicts
         ? null
-        : teamForm.unavailable_days.length
+        : teamForm.unavailable_days.length > 0
           ? teamForm.unavailable_days
           : null,
       earliest_start_time: teamForm.no_conflicts
@@ -507,21 +508,30 @@ export default function TournamentDetail({ director }) {
     loadTournamentDetail()
   }
 
-  const availableTeams = useMemo(() => {
-    const existingIds = new Set(teams.map((team) => String(team.id)))
-    return allTeams.filter((team) => !existingIds.has(String(team.id)))
-  }, [allTeams, teams])
+  const directoryTeams = useMemo(() => {
+    return [...allTeams].sort((a, b) =>
+      (a.team_name || '').localeCompare(b.team_name || '')
+    )
+  }, [allTeams])
 
-  const filteredAvailableTeams = useMemo(() => {
+  const filteredDirectoryTeams = useMemo(() => {
     const q = teamSearch.trim().toLowerCase()
-    if (!q) return availableTeams
+    if (!q) return directoryTeams
 
-    return availableTeams.filter((team) => {
+    return directoryTeams.filter((team) => {
       const name = (team.team_name || '').toLowerCase()
       const org = (team.org_name || '').toLowerCase()
-      return name.includes(q) || org.includes(q)
+      const age = (team.age_group || '').toLowerCase()
+      const gender = (team.gender || '').toLowerCase()
+
+      return (
+        name.includes(q) ||
+        org.includes(q) ||
+        age.includes(q) ||
+        gender.includes(q)
+      )
     })
-  }, [availableTeams, teamSearch])
+  }, [directoryTeams, teamSearch])
 
   if (loading) {
     return <div style={{ padding: 40, color: '#4a5568', fontSize: 13 }}>Loading...</div>
@@ -863,8 +873,12 @@ export default function TournamentDetail({ director }) {
             style={{ ...input, marginBottom: 12 }}
           />
 
+          <div style={{ color: '#6b7a99', fontSize: 12, marginBottom: 10 }}>
+            Showing {filteredDirectoryTeams.length} teams from directory
+          </div>
+
           <div style={pickerList}>
-            {filteredAvailableTeams.map((team) => (
+            {filteredDirectoryTeams.map((team) => (
               <button
                 key={team.id}
                 onClick={() => setTeamForm((p) => ({ ...p, team_id: team.id }))}
@@ -874,10 +888,14 @@ export default function TournamentDetail({ director }) {
                     String(teamForm.team_id) === String(team.id)
                       ? '#5cb800'
                       : '#1a2030',
+                  background:
+                    String(teamForm.team_id) === String(team.id)
+                      ? 'rgba(92,184,0,0.15)'
+                      : '#04060a',
                 }}
               >
                 <div style={{ fontWeight: 600 }}>{team.team_name}</div>
-                <div style={{ fontSize: 12, color: '#6b7a99' }}>
+                <div style={{ fontSize: 12, color: '#6b7a99', marginTop: 4 }}>
                   {team.org_name || 'No Org'} · {team.age_group || '—'} · {team.gender || '—'}
                 </div>
               </button>
