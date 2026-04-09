@@ -55,6 +55,7 @@ export default function TournamentDetail({ director }) {
   const [showCopyModal, setShowCopyModal] = useState(false)
 
   const [selectedTournamentTeam, setSelectedTournamentTeam] = useState(null)
+  const [selectedDirectoryTeam, setSelectedDirectoryTeam] = useState(null)
   const [teamSearch, setTeamSearch] = useState('')
   const [copyName, setCopyName] = useState('')
 
@@ -224,9 +225,28 @@ export default function TournamentDetail({ director }) {
 
   function openAddTeamModal() {
     setSelectedTournamentTeam(null)
+    setSelectedDirectoryTeam(null)
     setTeamSearch('')
-    setTeamForm(emptyTeamForm)
+    setTeamForm({
+      ...emptyTeamForm,
+      custom_entry_fee:
+        tournament?.registration_fee != null
+          ? String(tournament.registration_fee)
+          : '',
+    })
     setShowAddTeamModal(true)
+  }
+
+  function handleSelectTeam(team) {
+    setSelectedDirectoryTeam(team)
+    setTeamForm((prev) => ({
+      ...prev,
+      team_id: team.id,
+      custom_entry_fee:
+        tournament?.registration_fee != null
+          ? String(tournament.registration_fee)
+          : prev.custom_entry_fee,
+    }))
   }
 
   function openEditTeamModal(team) {
@@ -296,7 +316,10 @@ export default function TournamentDetail({ director }) {
   }
 
   async function handleAddTeam() {
-    if (!teamForm.team_id) return
+    if (!teamForm.team_id) {
+      setError('Please select a team first.')
+      return
+    }
 
     setSavingTeam(true)
     setError('')
@@ -324,6 +347,7 @@ export default function TournamentDetail({ director }) {
       await saveTeamConflict(teamForm.team_id)
 
       setShowAddTeamModal(false)
+      setSelectedDirectoryTeam(null)
       setTeamForm(emptyTeamForm)
       setSuccess('Team added to tournament.')
       setSavingTeam(false)
@@ -865,159 +889,203 @@ export default function TournamentDetail({ director }) {
       </div>
 
       {showAddTeamModal && (
-        <Modal title="Add Team To Tournament" onClose={() => setShowAddTeamModal(false)}>
-          <input
-            placeholder="Search teams or orgs"
-            value={teamSearch}
-            onChange={(e) => setTeamSearch(e.target.value)}
-            style={{ ...input, marginBottom: 12 }}
-          />
+        <Modal
+          title={selectedDirectoryTeam ? 'Add Team To Tournament' : 'Select Team'}
+          onClose={() => {
+            setShowAddTeamModal(false)
+            setSelectedDirectoryTeam(null)
+            setTeamForm(emptyTeamForm)
+          }}
+        >
+          {!selectedDirectoryTeam ? (
+            <>
+              <input
+                placeholder="Search teams or orgs"
+                value={teamSearch}
+                onChange={(e) => setTeamSearch(e.target.value)}
+                style={{ ...input, marginBottom: 12 }}
+              />
 
-          <div style={{ color: '#6b7a99', fontSize: 12, marginBottom: 10 }}>
-            Showing {filteredDirectoryTeams.length} teams from directory
-          </div>
+              <div style={{ color: '#6b7a99', fontSize: 12, marginBottom: 10 }}>
+                Showing {filteredDirectoryTeams.length} teams from directory
+              </div>
 
-          <div style={pickerList}>
-            {filteredDirectoryTeams.map((team) => (
-              <button
-                key={team.id}
-                onClick={() => setTeamForm((p) => ({ ...p, team_id: team.id }))}
+              <div style={pickerList}>
+                {filteredDirectoryTeams.map((team) => (
+                  <button
+                    key={team.id}
+                    onClick={() => handleSelectTeam(team)}
+                    style={pickerItem}
+                  >
+                    <div style={{ fontWeight: 600 }}>{team.team_name}</div>
+                    <div style={{ fontSize: 12, color: '#6b7a99', marginTop: 4 }}>
+                      {team.org_name || 'No Org'} · {team.age_group || '—'} · {team.gender || '—'}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div style={modalActions}>
+                <button
+                  onClick={() => {
+                    setShowAddTeamModal(false)
+                    setSelectedDirectoryTeam(null)
+                    setTeamForm(emptyTeamForm)
+                  }}
+                  style={ghostButton}
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div
                 style={{
-                  ...pickerItem,
-                  borderColor:
-                    String(teamForm.team_id) === String(team.id)
-                      ? '#5cb800'
-                      : '#1a2030',
-                  background:
-                    String(teamForm.team_id) === String(team.id)
-                      ? 'rgba(92,184,0,0.15)'
-                      : '#04060a',
+                  background: '#04060a',
+                  border: '1px solid #1a2030',
+                  borderRadius: 10,
+                  padding: 14,
+                  marginBottom: 16,
                 }}
               >
-                <div style={{ fontWeight: 600 }}>{team.team_name}</div>
+                <div style={{ fontWeight: 700 }}>{selectedDirectoryTeam.team_name}</div>
                 <div style={{ fontSize: 12, color: '#6b7a99', marginTop: 4 }}>
-                  {team.org_name || 'No Org'} · {team.age_group || '—'} · {team.gender || '—'}
+                  {selectedDirectoryTeam.org_name || 'No Org'} · {selectedDirectoryTeam.age_group || '—'} · {selectedDirectoryTeam.gender || '—'}
                 </div>
-              </button>
-            ))}
-          </div>
+              </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 16 }}>
-            <input
-              placeholder="Custom Fee"
-              value={teamForm.custom_entry_fee}
-              onChange={(e) => setTeamForm((p) => ({ ...p, custom_entry_fee: e.target.value }))}
-              style={input}
-            />
-            <select
-              value={teamForm.payment_status}
-              onChange={(e) => setTeamForm((p) => ({ ...p, payment_status: e.target.value }))}
-              style={input}
-            >
-              <option value="unpaid">Unpaid</option>
-              <option value="paid">Paid</option>
-              <option value="partial">Partial</option>
-            </select>
-            <select
-              value={teamForm.registration_status}
-              onChange={(e) => setTeamForm((p) => ({ ...p, registration_status: e.target.value }))}
-              style={input}
-            >
-              <option value="approved">Approved</option>
-              <option value="pending">Pending</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+                <input
+                  placeholder="Custom Fee"
+                  value={teamForm.custom_entry_fee}
+                  onChange={(e) => setTeamForm((p) => ({ ...p, custom_entry_fee: e.target.value }))}
+                  style={input}
+                />
+                <select
+                  value={teamForm.payment_status}
+                  onChange={(e) => setTeamForm((p) => ({ ...p, payment_status: e.target.value }))}
+                  style={input}
+                >
+                  <option value="unpaid">Unpaid</option>
+                  <option value="paid">Paid</option>
+                  <option value="partial">Partial</option>
+                </select>
+                <select
+                  value={teamForm.registration_status}
+                  onChange={(e) => setTeamForm((p) => ({ ...p, registration_status: e.target.value }))}
+                  style={input}
+                >
+                  <option value="approved">Approved</option>
+                  <option value="pending">Pending</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
 
-          <textarea
-            placeholder="Notes"
-            value={teamForm.notes}
-            onChange={(e) => setTeamForm((p) => ({ ...p, notes: e.target.value }))}
-            style={textarea}
-          />
-
-          <div style={{ marginTop: 16 }}>
-            <label style={checkboxLabel}>
-              <input
-                type="checkbox"
-                checked={teamForm.no_conflicts}
-                onChange={(e) =>
-                  setTeamForm((p) => ({
-                    ...p,
-                    no_conflicts: e.target.checked,
-                  }))
-                }
-              />
-              No conflicts
-            </label>
-          </div>
-
-          {!teamForm.no_conflicts && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 16 }}>
-              <input
-                placeholder="Shared Coach Group"
-                value={teamForm.shared_coach_group}
-                onChange={(e) => setTeamForm((p) => ({ ...p, shared_coach_group: e.target.value }))}
-                style={input}
+              <textarea
+                placeholder="Notes"
+                value={teamForm.notes}
+                onChange={(e) => setTeamForm((p) => ({ ...p, notes: e.target.value }))}
+                style={textarea}
               />
 
-              <select
-                value={teamForm.preferred_day}
-                onChange={(e) => setTeamForm((p) => ({ ...p, preferred_day: e.target.value }))}
-                style={input}
-              >
-                <option value="">Preferred Day</option>
-                <option value="Saturday">Saturday</option>
-                <option value="Sunday">Sunday</option>
-              </select>
+              <div style={{ marginTop: 16 }}>
+                <label style={checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={teamForm.no_conflicts}
+                    onChange={(e) =>
+                      setTeamForm((p) => ({
+                        ...p,
+                        no_conflicts: e.target.checked,
+                      }))
+                    }
+                  />
+                  No conflicts
+                </label>
+              </div>
 
-              <input
-                placeholder="Unavailable Days (comma separated)"
-                value={teamForm.unavailable_days.join(', ')}
-                onChange={(e) =>
-                  setTeamForm((p) => ({
-                    ...p,
-                    unavailable_days: e.target.value
-                      .split(',')
-                      .map((v) => v.trim())
-                      .filter(Boolean),
-                  }))
-                }
-                style={input}
-              />
+              {!teamForm.no_conflicts && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 16 }}>
+                  <input
+                    placeholder="Shared Coach Group"
+                    value={teamForm.shared_coach_group}
+                    onChange={(e) => setTeamForm((p) => ({ ...p, shared_coach_group: e.target.value }))}
+                    style={input}
+                  />
 
-              <input
-                type="time"
-                value={teamForm.earliest_start_time}
-                onChange={(e) => setTeamForm((p) => ({ ...p, earliest_start_time: e.target.value }))}
-                style={input}
-              />
+                  <select
+                    value={teamForm.preferred_day}
+                    onChange={(e) => setTeamForm((p) => ({ ...p, preferred_day: e.target.value }))}
+                    style={input}
+                  >
+                    <option value="">Preferred Day</option>
+                    <option value="Saturday">Saturday</option>
+                    <option value="Sunday">Sunday</option>
+                  </select>
 
-              <input
-                type="time"
-                value={teamForm.latest_start_time}
-                onChange={(e) => setTeamForm((p) => ({ ...p, latest_start_time: e.target.value }))}
-                style={input}
-              />
+                  <input
+                    placeholder="Unavailable Days (comma separated)"
+                    value={teamForm.unavailable_days.join(', ')}
+                    onChange={(e) =>
+                      setTeamForm((p) => ({
+                        ...p,
+                        unavailable_days: e.target.value
+                          .split(',')
+                          .map((v) => v.trim())
+                          .filter(Boolean),
+                      }))
+                    }
+                    style={input}
+                  />
 
-              <input
-                type="number"
-                placeholder="Min Rest Minutes"
-                value={teamForm.min_rest_minutes}
-                onChange={(e) => setTeamForm((p) => ({ ...p, min_rest_minutes: e.target.value }))}
-                style={input}
-              />
-            </div>
+                  <input
+                    type="time"
+                    value={teamForm.earliest_start_time}
+                    onChange={(e) => setTeamForm((p) => ({ ...p, earliest_start_time: e.target.value }))}
+                    style={input}
+                  />
+
+                  <input
+                    type="time"
+                    value={teamForm.latest_start_time}
+                    onChange={(e) => setTeamForm((p) => ({ ...p, latest_start_time: e.target.value }))}
+                    style={input}
+                  />
+
+                  <input
+                    type="number"
+                    placeholder="Min Rest Minutes"
+                    value={teamForm.min_rest_minutes}
+                    onChange={(e) => setTeamForm((p) => ({ ...p, min_rest_minutes: e.target.value }))}
+                    style={input}
+                  />
+                </div>
+              )}
+
+              <div style={modalActions}>
+                <button
+                  onClick={() => {
+                    setSelectedDirectoryTeam(null)
+                    setTeamForm({
+                      ...emptyTeamForm,
+                      custom_entry_fee:
+                        tournament?.registration_fee != null
+                          ? String(tournament.registration_fee)
+                          : '',
+                    })
+                  }}
+                  style={secondaryButton}
+                >
+                  Back
+                </button>
+
+                <button onClick={handleAddTeam} disabled={savingTeam} style={primaryButton}>
+                  {savingTeam ? 'Adding...' : 'Save Team'}
+                </button>
+              </div>
+            </>
           )}
-
-          <div style={modalActions}>
-            <button onClick={() => setShowAddTeamModal(false)} style={ghostButton}>
-              Cancel
-            </button>
-            <button onClick={handleAddTeam} disabled={savingTeam} style={primaryButton}>
-              {savingTeam ? 'Adding...' : 'Add Team'}
-            </button>
-          </div>
         </Modal>
       )}
 
@@ -1226,6 +1294,16 @@ const ghostButton = {
   cursor: 'pointer',
 }
 
+const secondaryButton = {
+  background: '#111827',
+  color: '#fff',
+  border: '1px solid #1f2937',
+  padding: '8px 14px',
+  borderRadius: 8,
+  fontSize: 13,
+  cursor: 'pointer',
+}
+
 const ghostButtonSmall = {
   background: 'transparent',
   color: '#d8e0f0',
@@ -1423,7 +1501,7 @@ const modalActions = {
 }
 
 const pickerList = {
-  maxHeight: 280,
+  maxHeight: 360,
   overflowY: 'auto',
   display: 'grid',
   gap: 8,
