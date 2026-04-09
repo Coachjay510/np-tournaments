@@ -10,17 +10,13 @@ const emptyTeamForm = {
   payment_status: 'unpaid',
   registration_status: 'approved',
   notes: '',
-}
-
-const emptyConstraintForm = {
-  team_id: '',
+  no_conflicts: true,
   shared_coach_group: '',
   preferred_day: '',
   unavailable_days: [],
   earliest_start_time: '',
   latest_start_time: '',
   min_rest_minutes: 0,
-  notes: '',
 }
 
 const emptyScheduleForm = {
@@ -41,13 +37,12 @@ export default function TournamentDetail({ director }) {
   const [allTeams, setAllTeams] = useState([])
   const [venues, setVenues] = useState([])
   const [scheduleSettings, setScheduleSettings] = useState([])
-  const [constraints, setConstraints] = useState([])
+  const [teamConstraints, setTeamConstraints] = useState([])
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingTeam, setSavingTeam] = useState(false)
   const [savingSchedule, setSavingSchedule] = useState(false)
-  const [savingConstraint, setSavingConstraint] = useState(false)
   const [copying, setCopying] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -64,7 +59,6 @@ export default function TournamentDetail({ director }) {
   const [copyName, setCopyName] = useState('')
 
   const [teamForm, setTeamForm] = useState(emptyTeamForm)
-  const [constraintForm, setConstraintForm] = useState(emptyConstraintForm)
   const [scheduleForm, setScheduleForm] = useState(emptyScheduleForm)
 
   const [form, setForm] = useState({
@@ -107,24 +101,29 @@ export default function TournamentDetail({ director }) {
         .select('*, divisions(*), venues(*)')
         .eq('id', id)
         .single(),
+
       supabase
         .from('teams')
         .select('*, division:divisions(name)')
         .eq('tournament_id', id)
         .order('registered_at', { ascending: false }),
+
       supabase
         .from('teams')
         .select('id, team_name, org_name, tournament_id, age_group, gender')
         .order('team_name', { ascending: true }),
+
       supabase
         .from('venues')
         .select('*')
         .order('name', { ascending: true }),
+
       supabase
         .from('tournament_schedule_settings')
         .select('*')
         .eq('tournament_id', id)
         .order('event_date', { ascending: true }),
+
       supabase
         .from('tournament_team_constraints')
         .select('*')
@@ -139,14 +138,14 @@ export default function TournamentDetail({ director }) {
       return
     }
 
-    setTournament(tournamentRes.data)
+    const t = tournamentRes.data
+
+    setTournament(t)
     setTeams(teamRes.data || [])
     setAllTeams(allTeamsRes.data || [])
     setVenues(venueRes.data || [])
     setScheduleSettings(scheduleRes.data || [])
-    setConstraints(constraintsRes.data || [])
-
-    const t = tournamentRes.data
+    setTeamConstraints(constraintsRes.data || [])
 
     setForm({
       name: t?.name || '',
@@ -173,6 +172,10 @@ export default function TournamentDetail({ director }) {
 
   function updateField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  function getConstraintForTeam(teamId) {
+    return teamConstraints.find((c) => String(c.team_id) === String(teamId))
   }
 
   async function handleSaveTournament() {
@@ -219,12 +222,15 @@ export default function TournamentDetail({ director }) {
   }
 
   function openAddTeamModal() {
-    setTeamForm(emptyTeamForm)
+    setSelectedTournamentTeam(null)
     setTeamSearch('')
+    setTeamForm(emptyTeamForm)
     setShowAddTeamModal(true)
   }
 
   function openEditTeamModal(team) {
+    const existingConstraint = getConstraintForTeam(team.id)
+
     setSelectedTournamentTeam(team)
     setTeamForm({
       team_id: team.id,
@@ -232,8 +238,60 @@ export default function TournamentDetail({ director }) {
       payment_status: team.payment_status || 'unpaid',
       registration_status: team.registration_status || 'approved',
       notes: team.team_notes || '',
+      no_conflicts: existingConstraint ? !existingConstraint.has_conflicts : true,
+      shared_coach_group: existingConstraint?.shared_coach_group || '',
+      preferred_day: existingConstraint?.preferred_day || '',
+      unavailable_days: existingConstraint?.unavailable_days || [],
+      earliest_start_time: existingConstraint?.earliest_start_time || '',
+      latest_start_time: existingConstraint?.latest_start_time || '',
+      min_rest_minutes: existingConstraint?.min_rest_minutes || 0,
     })
     setShowEditTeamModal(true)
+  }
+
+  async function saveTeamConflict(teamId) {
+    const existingConstraint = getConstraintForTeam(teamId)
+
+    const constraintPayload = {
+      tournament_id: id,
+      team_id: teamId,
+      has_conflicts: !teamForm.no_conflicts,
+      shared_coach_group: teamForm.no_conflicts
+        ? null
+        : teamForm.shared_coach_group || null,
+      preferred_day: teamForm.no_conflicts
+        ? null
+        : teamForm.preferred_day || null,
+      unavailable_days: teamForm.no_conflicts
+        ? null
+        : teamForm.unavailable_days.length
+          ? teamForm.unavailable_days
+          : null,
+      earliest_start_time: teamForm.no_conflicts
+        ? null
+        : teamForm.earliest_start_time || null,
+      latest_start_time: teamForm.no_conflicts
+        ? null
+        : teamForm.latest_start_time || null,
+      min_rest_minutes: teamForm.no_conflicts
+        ? 0
+        : Number(teamForm.min_rest_minutes || 0),
+    }
+
+    if (existingConstraint) {
+      const { error } = await supabase
+        .from('tournament_team_constraints')
+        .update(constraintPayload)
+        .eq('id', existingConstraint.id)
+
+      if (error) throw error
+    } else {
+      const { error } = await supabase
+        .from('tournament_team_constraints')
+        .insert(constraintPayload)
+
+      if (error) throw error
+    }
   }
 
   async function handleAddTeam() {
@@ -243,34 +301,37 @@ export default function TournamentDetail({ director }) {
     setError('')
     setSuccess('')
 
-    const payload = {
-      tournament_id: id,
-      payment_status: teamForm.payment_status,
-      registration_status: teamForm.registration_status,
-      team_notes: teamForm.notes || null,
-      custom_entry_fee:
-        teamForm.custom_entry_fee === ''
-          ? null
-          : Number(teamForm.custom_entry_fee),
-    }
+    try {
+      const payload = {
+        tournament_id: id,
+        payment_status: teamForm.payment_status,
+        registration_status: teamForm.registration_status,
+        team_notes: teamForm.notes || null,
+        custom_entry_fee:
+          teamForm.custom_entry_fee === ''
+            ? null
+            : Number(teamForm.custom_entry_fee),
+      }
 
-    const { error } = await supabase
-      .from('teams')
-      .update(payload)
-      .eq('id', teamForm.team_id)
+      const { error } = await supabase
+        .from('teams')
+        .update(payload)
+        .eq('id', teamForm.team_id)
 
-    if (error) {
-      console.error(error)
-      setError(error.message || 'Failed to add team.')
+      if (error) throw error
+
+      await saveTeamConflict(teamForm.team_id)
+
+      setShowAddTeamModal(false)
+      setTeamForm(emptyTeamForm)
+      setSuccess('Team added to tournament.')
       setSavingTeam(false)
-      return
+      loadTournamentDetail()
+    } catch (err) {
+      console.error(err)
+      setError(err.message || 'Failed to add team.')
+      setSavingTeam(false)
     }
-
-    setShowAddTeamModal(false)
-    setTeamForm(emptyTeamForm)
-    setSuccess('Team added to tournament.')
-    setSavingTeam(false)
-    loadTournamentDetail()
   }
 
   async function handleUpdateTeamAssignment() {
@@ -280,53 +341,65 @@ export default function TournamentDetail({ director }) {
     setError('')
     setSuccess('')
 
-    const payload = {
-      payment_status: teamForm.payment_status,
-      registration_status: teamForm.registration_status,
-      team_notes: teamForm.notes || null,
-      custom_entry_fee:
-        teamForm.custom_entry_fee === ''
-          ? null
-          : Number(teamForm.custom_entry_fee),
-    }
+    try {
+      const payload = {
+        payment_status: teamForm.payment_status,
+        registration_status: teamForm.registration_status,
+        team_notes: teamForm.notes || null,
+        custom_entry_fee:
+          teamForm.custom_entry_fee === ''
+            ? null
+            : Number(teamForm.custom_entry_fee),
+      }
 
-    const { error } = await supabase
-      .from('teams')
-      .update(payload)
-      .eq('id', selectedTournamentTeam.id)
+      const { error } = await supabase
+        .from('teams')
+        .update(payload)
+        .eq('id', selectedTournamentTeam.id)
 
-    if (error) {
-      console.error(error)
-      setError(error.message || 'Failed to update team assignment.')
+      if (error) throw error
+
+      await saveTeamConflict(selectedTournamentTeam.id)
+
+      setShowEditTeamModal(false)
+      setSelectedTournamentTeam(null)
+      setSuccess('Tournament team updated.')
       setSavingTeam(false)
-      return
+      loadTournamentDetail()
+    } catch (err) {
+      console.error(err)
+      setError(err.message || 'Failed to update team assignment.')
+      setSavingTeam(false)
     }
-
-    setShowEditTeamModal(false)
-    setSelectedTournamentTeam(null)
-    setSuccess('Tournament team updated.')
-    setSavingTeam(false)
-    loadTournamentDetail()
   }
 
   async function handleRemoveTeam(teamId) {
-    const { error } = await supabase
-      .from('teams')
-      .update({
-        tournament_id: null,
-        custom_entry_fee: null,
-        team_notes: null,
-      })
-      .eq('id', teamId)
+    try {
+      const { error } = await supabase
+        .from('teams')
+        .update({
+          tournament_id: null,
+          custom_entry_fee: null,
+          team_notes: null,
+        })
+        .eq('id', teamId)
 
-    if (error) {
-      console.error(error)
-      setError(error.message || 'Failed to remove team.')
-      return
+      if (error) throw error
+
+      const existingConstraint = getConstraintForTeam(teamId)
+      if (existingConstraint) {
+        await supabase
+          .from('tournament_team_constraints')
+          .delete()
+          .eq('id', existingConstraint.id)
+      }
+
+      setSuccess('Team removed from tournament.')
+      loadTournamentDetail()
+    } catch (err) {
+      console.error(err)
+      setError(err.message || 'Failed to remove team.')
     }
-
-    setSuccess('Team removed from tournament.')
-    loadTournamentDetail()
   }
 
   async function handleDeleteTournament() {
@@ -434,61 +507,6 @@ export default function TournamentDetail({ director }) {
     loadTournamentDetail()
   }
 
-  async function handleAddConstraint() {
-    if (!constraintForm.team_id) return
-
-    setSavingConstraint(true)
-    setError('')
-    setSuccess('')
-
-    const payload = {
-      tournament_id: id,
-      team_id: constraintForm.team_id,
-      shared_coach_group: constraintForm.shared_coach_group || null,
-      preferred_day: constraintForm.preferred_day || null,
-      unavailable_days:
-        constraintForm.unavailable_days.length > 0
-          ? constraintForm.unavailable_days
-          : null,
-      earliest_start_time: constraintForm.earliest_start_time || null,
-      latest_start_time: constraintForm.latest_start_time || null,
-      min_rest_minutes: Number(constraintForm.min_rest_minutes || 0),
-      notes: constraintForm.notes || null,
-    }
-
-    const { error } = await supabase
-      .from('tournament_team_constraints')
-      .insert(payload)
-
-    if (error) {
-      console.error(error)
-      setError(error.message || 'Failed to add constraint.')
-      setSavingConstraint(false)
-      return
-    }
-
-    setConstraintForm(emptyConstraintForm)
-    setSuccess('Constraint added.')
-    setSavingConstraint(false)
-    loadTournamentDetail()
-  }
-
-  async function handleDeleteConstraint(constraintId) {
-    const { error } = await supabase
-      .from('tournament_team_constraints')
-      .delete()
-      .eq('id', constraintId)
-
-    if (error) {
-      console.error(error)
-      setError(error.message || 'Failed to remove constraint.')
-      return
-    }
-
-    setSuccess('Constraint removed.')
-    loadTournamentDetail()
-  }
-
   const availableTeams = useMemo(() => {
     const existingIds = new Set(teams.map((team) => String(team.id)))
     return allTeams.filter((team) => !existingIds.has(String(team.id)))
@@ -504,11 +522,6 @@ export default function TournamentDetail({ director }) {
       return name.includes(q) || org.includes(q)
     })
   }, [availableTeams, teamSearch])
-
-  const constraintTeamName = (teamId) => {
-    const team = allTeams.find((t) => String(t.id) === String(teamId))
-    return team?.team_name || 'Unknown Team'
-  }
 
   if (loading) {
     return <div style={{ padding: 40, color: '#4a5568', fontSize: 13 }}>Loading...</div>
@@ -691,6 +704,7 @@ export default function TournamentDetail({ director }) {
                   <th style={th}>Registration</th>
                   <th style={th}>Payment</th>
                   <th style={th}>Custom Fee</th>
+                  <th style={th}>Conflicts</th>
                   <th style={th}>Actions</th>
                 </tr>
               </thead>
@@ -703,6 +717,8 @@ export default function TournamentDetail({ director }) {
                         ? 'cancelled'
                         : 'draft'
                   )
+
+                  const conflict = getConstraintForTeam(team.id)
 
                   return (
                     <tr key={team.id}>
@@ -729,6 +745,9 @@ export default function TournamentDetail({ director }) {
                         {team.custom_entry_fee != null
                           ? formatCurrency(team.custom_entry_fee)
                           : '—'}
+                      </td>
+                      <td style={td}>
+                        {conflict?.has_conflicts ? 'Has conflicts' : 'No conflicts'}
                       </td>
                       <td style={td}>
                         <div style={{ display: 'flex', gap: 8 }}>
@@ -833,137 +852,6 @@ export default function TournamentDetail({ director }) {
             )}
           </div>
         </div>
-
-        <div style={panel}>
-          <div style={panelHeader}>TEAM CONSTRAINTS / CONFLICTS</div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
-            <select
-              value={constraintForm.team_id}
-              onChange={(e) => setConstraintForm((p) => ({ ...p, team_id: e.target.value }))}
-              style={input}
-            >
-              <option value="">Select Team</option>
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.team_name}
-                </option>
-              ))}
-            </select>
-
-            <input
-              placeholder="Shared Coach Group"
-              value={constraintForm.shared_coach_group}
-              onChange={(e) => setConstraintForm((p) => ({ ...p, shared_coach_group: e.target.value }))}
-              style={input}
-            />
-
-            <select
-              value={constraintForm.preferred_day}
-              onChange={(e) => setConstraintForm((p) => ({ ...p, preferred_day: e.target.value }))}
-              style={input}
-            >
-              <option value="">Preferred Day</option>
-              <option value="Saturday">Saturday</option>
-              <option value="Sunday">Sunday</option>
-            </select>
-
-            <input
-              placeholder="Unavailable Days (comma separated)"
-              value={constraintForm.unavailable_days.join(', ')}
-              onChange={(e) =>
-                setConstraintForm((p) => ({
-                  ...p,
-                  unavailable_days: e.target.value
-                    .split(',')
-                    .map((v) => v.trim())
-                    .filter(Boolean),
-                }))
-              }
-              style={input}
-            />
-
-            <input
-              type="time"
-              value={constraintForm.earliest_start_time}
-              onChange={(e) => setConstraintForm((p) => ({ ...p, earliest_start_time: e.target.value }))}
-              style={input}
-            />
-
-            <input
-              type="time"
-              value={constraintForm.latest_start_time}
-              onChange={(e) => setConstraintForm((p) => ({ ...p, latest_start_time: e.target.value }))}
-              style={input}
-            />
-
-            <input
-              type="number"
-              placeholder="Min Rest Minutes"
-              value={constraintForm.min_rest_minutes}
-              onChange={(e) => setConstraintForm((p) => ({ ...p, min_rest_minutes: e.target.value }))}
-              style={input}
-            />
-
-            <input
-              placeholder="Notes"
-              value={constraintForm.notes}
-              onChange={(e) => setConstraintForm((p) => ({ ...p, notes: e.target.value }))}
-              style={input}
-            />
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <button onClick={handleAddConstraint} disabled={savingConstraint} style={primaryButton}>
-              {savingConstraint ? 'Saving...' : 'Add Constraint'}
-            </button>
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            {constraints.length === 0 ? (
-              <div style={{ color: '#6b7a99' }}>No constraints added yet.</div>
-            ) : (
-              <table style={table}>
-                <thead>
-                  <tr>
-                    <th style={th}>Team</th>
-                    <th style={th}>Coach Group</th>
-                    <th style={th}>Preferred Day</th>
-                    <th style={th}>Unavailable</th>
-                    <th style={th}>Time Window</th>
-                    <th style={th}>Rest</th>
-                    <th style={th}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {constraints.map((constraint) => (
-                    <tr key={constraint.id}>
-                      <td style={td}>{constraintTeamName(constraint.team_id)}</td>
-                      <td style={td}>{constraint.shared_coach_group || '—'}</td>
-                      <td style={td}>{constraint.preferred_day || '—'}</td>
-                      <td style={td}>
-                        {constraint.unavailable_days?.length
-                          ? constraint.unavailable_days.join(', ')
-                          : '—'}
-                      </td>
-                      <td style={td}>
-                        {[constraint.earliest_start_time, constraint.latest_start_time]
-                          .filter(Boolean)
-                          .join(' - ') || '—'}
-                      </td>
-                      <td style={td}>{constraint.min_rest_minutes || 0} min</td>
-                      <td style={td}>
-                        <button onClick={() => handleDeleteConstraint(constraint.id)} style={dangerButtonSmall}>
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
       </div>
 
       {showAddTeamModal && (
@@ -1030,6 +918,80 @@ export default function TournamentDetail({ director }) {
             style={textarea}
           />
 
+          <div style={{ marginTop: 16 }}>
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={teamForm.no_conflicts}
+                onChange={(e) =>
+                  setTeamForm((p) => ({
+                    ...p,
+                    no_conflicts: e.target.checked,
+                  }))
+                }
+              />
+              No conflicts
+            </label>
+          </div>
+
+          {!teamForm.no_conflicts && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 16 }}>
+              <input
+                placeholder="Shared Coach Group"
+                value={teamForm.shared_coach_group}
+                onChange={(e) => setTeamForm((p) => ({ ...p, shared_coach_group: e.target.value }))}
+                style={input}
+              />
+
+              <select
+                value={teamForm.preferred_day}
+                onChange={(e) => setTeamForm((p) => ({ ...p, preferred_day: e.target.value }))}
+                style={input}
+              >
+                <option value="">Preferred Day</option>
+                <option value="Saturday">Saturday</option>
+                <option value="Sunday">Sunday</option>
+              </select>
+
+              <input
+                placeholder="Unavailable Days (comma separated)"
+                value={teamForm.unavailable_days.join(', ')}
+                onChange={(e) =>
+                  setTeamForm((p) => ({
+                    ...p,
+                    unavailable_days: e.target.value
+                      .split(',')
+                      .map((v) => v.trim())
+                      .filter(Boolean),
+                  }))
+                }
+                style={input}
+              />
+
+              <input
+                type="time"
+                value={teamForm.earliest_start_time}
+                onChange={(e) => setTeamForm((p) => ({ ...p, earliest_start_time: e.target.value }))}
+                style={input}
+              />
+
+              <input
+                type="time"
+                value={teamForm.latest_start_time}
+                onChange={(e) => setTeamForm((p) => ({ ...p, latest_start_time: e.target.value }))}
+                style={input}
+              />
+
+              <input
+                type="number"
+                placeholder="Min Rest Minutes"
+                value={teamForm.min_rest_minutes}
+                onChange={(e) => setTeamForm((p) => ({ ...p, min_rest_minutes: e.target.value }))}
+                style={input}
+              />
+            </div>
+          )}
+
           <div style={modalActions}>
             <button onClick={() => setShowAddTeamModal(false)} style={ghostButton}>
               Cancel
@@ -1080,6 +1042,80 @@ export default function TournamentDetail({ director }) {
             onChange={(e) => setTeamForm((p) => ({ ...p, notes: e.target.value }))}
             style={textarea}
           />
+
+          <div style={{ marginTop: 16 }}>
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={teamForm.no_conflicts}
+                onChange={(e) =>
+                  setTeamForm((p) => ({
+                    ...p,
+                    no_conflicts: e.target.checked,
+                  }))
+                }
+              />
+              No conflicts
+            </label>
+          </div>
+
+          {!teamForm.no_conflicts && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 16 }}>
+              <input
+                placeholder="Shared Coach Group"
+                value={teamForm.shared_coach_group}
+                onChange={(e) => setTeamForm((p) => ({ ...p, shared_coach_group: e.target.value }))}
+                style={input}
+              />
+
+              <select
+                value={teamForm.preferred_day}
+                onChange={(e) => setTeamForm((p) => ({ ...p, preferred_day: e.target.value }))}
+                style={input}
+              >
+                <option value="">Preferred Day</option>
+                <option value="Saturday">Saturday</option>
+                <option value="Sunday">Sunday</option>
+              </select>
+
+              <input
+                placeholder="Unavailable Days (comma separated)"
+                value={teamForm.unavailable_days.join(', ')}
+                onChange={(e) =>
+                  setTeamForm((p) => ({
+                    ...p,
+                    unavailable_days: e.target.value
+                      .split(',')
+                      .map((v) => v.trim())
+                      .filter(Boolean),
+                  }))
+                }
+                style={input}
+              />
+
+              <input
+                type="time"
+                value={teamForm.earliest_start_time}
+                onChange={(e) => setTeamForm((p) => ({ ...p, earliest_start_time: e.target.value }))}
+                style={input}
+              />
+
+              <input
+                type="time"
+                value={teamForm.latest_start_time}
+                onChange={(e) => setTeamForm((p) => ({ ...p, latest_start_time: e.target.value }))}
+                style={input}
+              />
+
+              <input
+                type="number"
+                placeholder="Min Rest Minutes"
+                value={teamForm.min_rest_minutes}
+                onChange={(e) => setTeamForm((p) => ({ ...p, min_rest_minutes: e.target.value }))}
+                style={input}
+              />
+            </div>
+          )}
 
           <div style={modalActions}>
             <button onClick={() => setShowEditTeamModal(false)} style={ghostButton}>
