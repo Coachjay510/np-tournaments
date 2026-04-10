@@ -105,10 +105,10 @@ export default function TournamentDetail({ director }) {
         .single(),
 
       supabase
-        .from('teams')
-        .select('*, division:divisions(name)')
+        .from('tournament_teams')
+        .select('*')
         .eq('tournament_id', id)
-        .order('registered_at', { ascending: false }),
+        .order('created_at', { ascending: false }),
 
       supabase
         .from('bt_master_teams')
