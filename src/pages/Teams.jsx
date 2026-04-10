@@ -145,7 +145,7 @@ export default function Teams() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: '#0a0f1a' }}>
-                      {['Source Team', 'Source', 'Division', 'Master Team', 'Master ID', 'Source ID', 'Status', 'Actions'].map((label) => (
+                      {['Source Team', 'Source', 'Division', 'Org', 'Master Team', 'Master ID', 'Source ID', 'Status', 'Actions'].map((label) => (
                         <th key={label} style={{ textAlign: 'left', padding: '12px 14px', fontSize: 11, color: '#6b7a99', textTransform: 'uppercase', letterSpacing: '1px', borderBottom: '1px solid #1a2030' }}>
                           {label}
                         </th>
@@ -158,6 +158,9 @@ export default function Teams() {
                         <td style={{ padding: '13px 14px', color: '#d8e0f0', fontWeight: 600 }}>{team.source_team_name}</td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.ranking_source}</td>
                         <td style={{ padding: '13px 14px', color: '#6b7a99', fontSize: 12 }}>{team.ranking_division_key || '—'}</td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>
+                          {team.bt_master_teams?.organizations?.name || <span style={{ color: '#4a5568' }}>No org</span>}
+                        </td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.bt_master_teams?.display_name || '—'}</td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.master_team_id || '—'}</td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.source_team_id}</td>
@@ -208,21 +211,19 @@ export default function Teams() {
         </div>
       </div>
 
-      {mergeTeam && (
-        <TeamMergeModal
-          team={mergeTeam}
-          onClose={() => setMergeTeam(null)}
-          onSaved={() => { setMergeTeam(null); refresh() }}
-        />
-      )}
+      <TeamMergeModal
+        open={!!mergeTeam}
+        team={mergeTeam}
+        onClose={() => setMergeTeam(null)}
+        onMerged={() => { setMergeTeam(null); refresh() }}
+      />
 
-      {orgTeam && (
-        <TeamOrgModal
-          team={orgTeam}
-          onClose={() => setOrgTeam(null)}
-          onSaved={() => { setOrgTeam(null); refresh() }}
-        />
-      )}
+      <TeamOrgModal
+        open={!!orgTeam}
+        team={orgTeam}
+        onClose={() => setOrgTeam(null)}
+        onAssigned={() => { setOrgTeam(null); refresh() }}
+      />
     </div>
   )
 }
