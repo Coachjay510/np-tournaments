@@ -111,9 +111,9 @@ export default function TournamentDetail({ director }) {
         .order('registered_at', { ascending: false }),
 
       supabase
-        .from('teams')
-        .select('id, team_name, org_name, tournament_id, age_group, gender')
-        .order('team_name', { ascending: true }),
+        .from('bt_master_teams')
+        .select('id, display_name, age_group, gender, ranking_division_key, bt_organizations(org_name)')
+        .order('display_name', { ascending: true }),
 
       supabase
         .from('venues')
@@ -144,7 +144,11 @@ export default function TournamentDetail({ director }) {
 
     setTournament(t)
     setTeams(teamRes.data || [])
-    setAllTeams(allTeamsRes.data || [])
+    setAllTeams((allTeamsRes.data || []).map(t => ({
+      ...t,
+      team_name: t.display_name,
+      org_name: t.bt_organizations?.org_name || '',
+    })))
     setVenues(venueRes.data || [])
     setScheduleSettings(scheduleRes.data || [])
     setTeamConstraints(constraintsRes.data || [])
