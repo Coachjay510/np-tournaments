@@ -332,6 +332,7 @@ export default function TournamentDetail({ director }) {
     try {
       const payload = {
         tournament_id: id,
+        team_id: Number(teamForm.team_id),
         payment_status: teamForm.payment_status,
         approval_status: teamForm.registration_status,
         notes: teamForm.notes || null,
@@ -343,8 +344,7 @@ export default function TournamentDetail({ director }) {
 
       const { error } = await supabase
         .from('tournament_teams')
-        .update(payload)
-        .eq('id', teamForm.team_id)
+        .insert(payload)
 
       if (error) throw error
 
