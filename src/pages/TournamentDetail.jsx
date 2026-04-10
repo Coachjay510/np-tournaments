@@ -382,7 +382,7 @@ export default function TournamentDetail({ director }) {
       }
 
       const { error } = await supabase
-        .from('teams')
+        .from('tournament_teams')
         .update(payload)
         .eq('id', selectedTournamentTeam.id)
 
