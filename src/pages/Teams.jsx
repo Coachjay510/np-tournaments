@@ -59,6 +59,11 @@ export default function Teams() {
   const [orgTeam, setOrgTeam] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
+  const [orgs, setOrgs] = useState([])
+  const [createForm, setCreateForm] = useState({ display_name: '', ranking_division_key: '', age_group: '', gender: '', organization_id: '', contact_name: '', contact_email: '', contact_phone: '' })
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
 
   const divisionOptions = useMemo(() => {
     const values = [...new Set((teams || []).map((t) => t.ranking_division_key).filter(Boolean))]
@@ -117,6 +122,32 @@ export default function Teams() {
   function goNext() { setPage((p) => Math.min(totalPages, p + 1)) }
   function resetPageAndSet(setter, value) { setPage(1); setter(value) }
 
+  async function loadOrgs() {
+    const { data } = await supabase.from('bt_organizations').select('id, org_name').order('org_name')
+    setOrgs(data || [])
+  }
+
+  async function handleCreateTeam() {
+    if (!createForm.display_name.trim()) { setCreateError('Team name is required'); return }
+    setCreating(true)
+    setCreateError('')
+    const { error } = await supabase.from('bt_master_teams').insert({
+      display_name: createForm.display_name.trim(),
+      ranking_division_key: createForm.ranking_division_key.trim() || null,
+      age_group: createForm.age_group.trim() || null,
+      gender: createForm.gender || null,
+      organization_id: createForm.organization_id ? Number(createForm.organization_id) : null,
+      contact_name: createForm.contact_name.trim() || null,
+      contact_email: createForm.contact_email.trim() || null,
+      contact_phone: createForm.contact_phone.trim() || null,
+    })
+    if (error) { setCreateError(error.message); setCreating(false); return }
+    setCreating(false)
+    setShowCreate(false)
+    setCreateForm({ display_name: '', ranking_division_key: '', age_group: '', gender: '', organization_id: '', contact_name: '', contact_email: '', contact_phone: '' })
+    refresh()
+  }
+
   async function handleDeleteTeam(team) {
     setDeleting(true)
     await supabase.from('bt_team_links').delete().eq('id', team.id)
@@ -135,6 +166,9 @@ export default function Teams() {
       <Topbar
         title="TEAMS"
         actions={
+          <button onClick={() => { setShowCreate(true); setCreateError(''); loadOrgs() }} style={{ background: '#1a2a4a', color: '#7eb3ff', border: '1px solid #1a3a6a', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            + Create Team
+          </button>
           <button onClick={refresh} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             Refresh Teams
           </button>
@@ -256,6 +290,54 @@ export default function Teams() {
         onClose={() => setOrgTeam(null)}
         onAssigned={() => { setOrgTeam(null); refresh() }}
       />
+
+      {showCreate && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 14, padding: 28, width: 560 }}>
+            <h2 style={{ margin: '0 0 20px', fontSize: 18, color: '#f0f4ff' }}>Create New Team</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {[
+                { key: 'display_name', label: 'Team Name *', type: 'input' },
+                { key: 'ranking_division_key', label: 'Division Key', type: 'input' },
+                { key: 'age_group', label: 'Age Group', type: 'input' },
+                { key: 'contact_name', label: 'Contact Name', type: 'input' },
+                { key: 'contact_email', label: 'Contact Email', type: 'input' },
+                { key: 'contact_phone', label: 'Contact Phone', type: 'input' },
+              ].map(({ key, label }) => (
+                <div key={key}>
+                  <label style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>{label}</label>
+                  <input value={createForm[key]} onChange={(e) => setCreateForm(p => ({ ...p, [key]: e.target.value }))}
+                    style={{ width: '100%', background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13, outline: 'none' }} />
+                </div>
+              ))}
+              <div>
+                <label style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>Gender</label>
+                <select value={createForm.gender} onChange={(e) => setCreateForm(p => ({ ...p, gender: e.target.value }))}
+                  style={{ width: '100%', background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13, outline: 'none' }}>
+                  <option value="">—</option>
+                  <option value="Boys">Boys</option>
+                  <option value="Girls">Girls</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>Organization</label>
+                <select value={createForm.organization_id} onChange={(e) => setCreateForm(p => ({ ...p, organization_id: e.target.value }))}
+                  style={{ width: '100%', background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13, outline: 'none' }}>
+                  <option value="">No organization</option>
+                  {orgs.map(org => (<option key={org.id} value={org.id}>{org.org_name}</option>))}
+                </select>
+              </div>
+            </div>
+            {createError && <div style={{ marginTop: 12, padding: '10px 14px', background: '#1f0707', border: '1px solid #3a0a0a', borderRadius: 8, fontSize: 12, color: '#e05555' }}>{createError}</div>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+              <button onClick={() => setShowCreate(false)} style={{ background: 'transparent', color: '#6b7a99', border: '1px solid #1a2030', padding: '9px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+              <button onClick={handleCreateTeam} disabled={creating} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
+                {creating ? 'Creating...' : 'Create Team'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteConfirm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
