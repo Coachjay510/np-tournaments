@@ -106,7 +106,7 @@ export default function TournamentDetail({ director }) {
 
       supabase
         .from('tournament_teams')
-        .select('*, bt_master_teams(id, display_name, age_group, gender, ranking_division_key, bt_organizations(org_name))')
+        .select('*')
         .eq('tournament_id', id)
         .order('created_at', { ascending: false }),
 
@@ -143,7 +143,15 @@ export default function TournamentDetail({ director }) {
     const t = tournamentRes.data
 
     setTournament(t)
-    setTeams(teamRes.data || [])
+    const masterTeamsMap = {}
+    ;(allTeamsRes.data || []).forEach(t => { masterTeamsMap[t.id] = t })
+    const teamsWithNames = (teamRes.data || []).map(t => ({
+      ...t,
+      bt_master_teams: masterTeamsMap[t.team_id] || null,
+      team_name: masterTeamsMap[t.team_id]?.display_name || '—',
+      org_name: masterTeamsMap[t.team_id]?.bt_organizations?.org_name || '—',
+    }))
+    setTeams(teamsWithNames)
     setAllTeams((allTeamsRes.data || []).map(t => ({
       ...t,
       team_name: t.display_name,
