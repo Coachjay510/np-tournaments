@@ -611,7 +611,7 @@ export default function TournamentDetail({ director }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 24 }}>
           {[
             { label: 'Teams', value: `${approved} / ${tournament.max_teams || 0}` },
-            { label: 'Revenue', value: formatCurrency(tournament.total_revenue || 0) },
+            { label: 'Revenue', value: formatCurrency(teams.reduce((sum, t) => sum + (parseFloat(t.custom_entry_fee) || parseFloat(tournament.registration_fee) || 0), 0)) },
             { label: 'Divisions', value: tournament.divisions?.length || 0 },
             { label: 'Pending', value: pending, color: pending > 0 ? '#d4a017' : '#f0f4ff' },
           ].map((s) => (
@@ -752,13 +752,13 @@ export default function TournamentDetail({ director }) {
                         : 'draft'
                   )
 
-                  const conflict = getConstraintForTeam(team.id)
+                  const conflict = getConstraintForTeam(team.team_id || team.id)
 
                   return (
                     <tr key={team.id}>
-                      <td style={td}>{team.team_name}</td>
-                      <td style={td}>{team.org_name || '—'}</td>
-                      <td style={td}>{team.division?.name || 'No division'}</td>
+                      <td style={td}>{team.bt_master_teams?.display_name || team.team_name || "—"}</td>
+                      <td style={td}>{team.bt_master_teams?.bt_organizations?.org_name || "—"}</td>
+                      <td style={td}>{team.bt_master_teams?.ranking_division_key || "—"}</td>
                       <td style={td}>
                         <span
                           style={{
