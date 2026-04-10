@@ -4,6 +4,7 @@ import Topbar from '../components/layout/Topbar'
 import { useTeamsAdmin } from '../hooks/useTeamsAdmin'
 import TeamMergeModal from '../components/teams/TeamMergeModal'
 import TeamOrgModal from '../components/teams/TeamOrgModal'
+import { supabase } from '../supabaseClient'
 
 function StatCard({ label, value, accent = '#f0f4ff' }) {
   return (
@@ -25,11 +26,22 @@ function badgeStyle(linked) {
 }
 
 const btnStyle = (color) => ({
-  padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+  padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
   cursor: 'pointer', border: 'none',
-  background: color === 'green' ? '#5cb800' : color === 'orange' ? '#d4630a' : '#1a2a4a',
-  color: color === 'green' ? '#04060a' : color === 'orange' ? '#fff' : '#7eb3ff',
+  background: color === 'green' ? '#5cb800' : color === 'orange' ? '#d4630a' : color === 'red' ? '#8b1a1a' : '#1a2a4a',
+  color: color === 'green' ? '#04060a' : '#fff',
 })
+
+const SORT_OPTIONS = [
+  { value: 'master_asc', label: 'Master Team A→Z' },
+  { value: 'master_desc', label: 'Master Team Z→A' },
+  { value: 'source_asc', label: 'Source Team A→Z' },
+  { value: 'source_desc', label: 'Source Team Z→A' },
+  { value: 'division_asc', label: 'Division A→Z' },
+  { value: 'org_asc', label: 'Org A→Z' },
+  { value: 'status_linked', label: 'Linked First' },
+  { value: 'status_unlinked', label: 'Unlinked First' },
+]
 
 const PER_PAGE = 20
 
@@ -41,9 +53,12 @@ export default function Teams() {
   const [source, setSource] = useState('all')
   const [division, setDivision] = useState('all')
   const [linkStatus, setLinkStatus] = useState('all')
+  const [sortBy, setSortBy] = useState('master_asc')
   const [page, setPage] = useState(1)
   const [mergeTeam, setMergeTeam] = useState(null)
   const [orgTeam, setOrgTeam] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   const divisionOptions = useMemo(() => {
     const values = [...new Set((teams || []).map((t) => t.ranking_division_key).filter(Boolean))]
@@ -62,26 +77,39 @@ export default function Teams() {
         row.bt_master_teams?.display_name?.toLowerCase().includes(q)
       )
     }
-    rows.sort((a, b) => {
-      const aMaster = a.bt_master_teams?.display_name || a.source_team_name || ''
-      const bMaster = b.bt_master_teams?.display_name || b.source_team_name || ''
-      const mc = aMaster.localeCompare(bMaster)
-      if (mc !== 0) return mc
-      const dc = (a.ranking_division_key || '').localeCompare(b.ranking_division_key || '')
-      if (dc !== 0) return dc
-      return (a.source_team_name || '').localeCompare(b.source_team_name || '')
-    })
-    return rows
-  }, [teams, source, division, linkStatus, search])
 
-  // Pre-compute which rows are "first of master group" inside useMemo so it's stable
+    rows.sort((a, b) => {
+      const aMaster = a.bt_master_teams?.display_name || ''
+      const bMaster = b.bt_master_teams?.display_name || ''
+      const aOrg = a.bt_master_teams?.bt_organizations?.org_name || ''
+      const bOrg = b.bt_master_teams?.bt_organizations?.org_name || ''
+
+      switch (sortBy) {
+        case 'master_asc': {
+          const mc = aMaster.localeCompare(bMaster)
+          if (mc !== 0) return mc
+          return (a.ranking_division_key || '').localeCompare(b.ranking_division_key || '')
+        }
+        case 'master_desc': return bMaster.localeCompare(aMaster)
+        case 'source_asc': return (a.source_team_name || '').localeCompare(b.source_team_name || '')
+        case 'source_desc': return (b.source_team_name || '').localeCompare(a.source_team_name || '')
+        case 'division_asc': return (a.ranking_division_key || '').localeCompare(b.ranking_division_key || '')
+        case 'org_asc': return aOrg.localeCompare(bOrg)
+        case 'status_linked': return (b.master_team_id ? 1 : 0) - (a.master_team_id ? 1 : 0)
+        case 'status_unlinked': return (a.master_team_id ? 1 : 0) - (b.master_team_id ? 1 : 0)
+        default: return 0
+      }
+    })
+
+    return rows
+  }, [teams, source, division, linkStatus, search, sortBy])
+
   const pagedTeams = useMemo(() => {
     const start = (page - 1) * PER_PAGE
     const slice = filteredTeams.slice(start, start + PER_PAGE)
-
     const seen = new Set()
     return slice.map((team) => {
-      const key = team.master_team_id ? `master-${team.master_team_id}` : `solo-${team.id}`
+      const key = team.master_team_id ? `m-${team.master_team_id}` : `s-${team.id}`
       const isFirst = !seen.has(key)
       seen.add(key)
       return { ...team, _isFirstOfGroup: isFirst }
@@ -97,6 +125,17 @@ export default function Teams() {
   function goNext() { setPage((p) => Math.min(totalPages, p + 1)) }
   function resetPageAndSet(setter, value) { setPage(1); setter(value) }
 
+  async function handleDeleteTeam(team) {
+    setDeleting(true)
+    if (team.master_team_id) {
+      // Delete the source link row
+      await supabase.from('bt_team_links').delete().eq('id', team.id)
+    }
+    setDeleting(false)
+    setDeleteConfirm(null)
+    refresh()
+  }
+
   const inputStyle = {
     width: '100%', background: '#0e1320', border: '1px solid #1a2030',
     color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13, outline: 'none',
@@ -107,7 +146,7 @@ export default function Teams() {
       <Topbar
         title="TEAMS"
         actions={
-          <button onClick={refresh} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700 }}>
+          <button onClick={refresh} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             Refresh Teams
           </button>
         }
@@ -127,7 +166,7 @@ export default function Teams() {
             <div style={{ fontSize: 11, color: '#4a5568', marginTop: 4 }}>Grouped by master team — source teams listed below each master</div>
           </div>
 
-          <div style={{ padding: 18, borderBottom: '1px solid #1a2030', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 12 }}>
+          <div style={{ padding: 18, borderBottom: '1px solid #1a2030', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 12 }}>
             <input type="text" value={search} onChange={(e) => resetPageAndSet(setSearch, e.target.value)} placeholder="Search team name or master team..." style={inputStyle} />
             <select value={source} onChange={(e) => resetPageAndSet(setSource, e.target.value)} style={inputStyle}>
               <option value="all">All Sources</option>
@@ -142,6 +181,9 @@ export default function Teams() {
               <option value="all">All Link Status</option>
               <option value="linked">Linked</option>
               <option value="unlinked">Unlinked</option>
+            </select>
+            <select value={sortBy} onChange={(e) => resetPageAndSet(setSortBy, e.target.value)} style={{ ...inputStyle, color: '#5cb800' }}>
+              {SORT_OPTIONS.map(o => (<option key={o.value} value={o.value}>{o.label}</option>))}
             </select>
           </div>
 
@@ -187,10 +229,11 @@ export default function Teams() {
                           </span>
                         </td>
                         <td style={{ padding: '13px 14px' }}>
-                          <div style={{ display: 'flex', gap: 6 }}>
+                          <div style={{ display: 'flex', gap: 5 }}>
                             <button style={btnStyle('blue')} onClick={() => navigate(`/teams/${team.master_team_id || team.id}`)}>View</button>
                             <button style={btnStyle('orange')} onClick={() => setOrgTeam(team)}>Org</button>
                             <button style={btnStyle('green')} onClick={() => setMergeTeam(team)}>Merge</button>
+                            <button style={btnStyle('red')} onClick={() => setDeleteConfirm(team)}>✕</button>
                           </div>
                         </td>
                       </tr>
@@ -200,13 +243,9 @@ export default function Teams() {
               </div>
 
               <div style={{ padding: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1a2030' }}>
-                <button onClick={goPrev} disabled={page === 1} style={{ background: 'transparent', color: page === 1 ? '#3b4558' : '#d8e0f0', border: '1px solid #1a2030', padding: '8px 14px', borderRadius: 8, fontSize: 12, cursor: page === 1 ? 'not-allowed' : 'pointer' }}>
-                  Previous
-                </button>
+                <button onClick={goPrev} disabled={page === 1} style={{ background: 'transparent', color: page === 1 ? '#3b4558' : '#d8e0f0', border: '1px solid #1a2030', padding: '8px 14px', borderRadius: 8, fontSize: 12, cursor: page === 1 ? 'not-allowed' : 'pointer' }}>Previous</button>
                 <div style={{ color: '#6b7a99', fontSize: 12 }}>Page {page} of {totalPages} · {filteredTeams.length} teams</div>
-                <button onClick={goNext} disabled={page === totalPages} style={{ background: 'transparent', color: page === totalPages ? '#3b4558' : '#d8e0f0', border: '1px solid #1a2030', padding: '8px 14px', borderRadius: 8, fontSize: 12, cursor: page === totalPages ? 'not-allowed' : 'pointer' }}>
-                  Next
-                </button>
+                <button onClick={goNext} disabled={page === totalPages} style={{ background: 'transparent', color: page === totalPages ? '#3b4558' : '#d8e0f0', border: '1px solid #1a2030', padding: '8px 14px', borderRadius: 8, fontSize: 12, cursor: page === totalPages ? 'not-allowed' : 'pointer' }}>Next</button>
               </div>
             </>
           )}
@@ -226,6 +265,23 @@ export default function Teams() {
         onClose={() => setOrgTeam(null)}
         onAssigned={() => { setOrgTeam(null); refresh() }}
       />
+
+      {deleteConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#080c12', border: '1px solid #3a0a0a', borderRadius: 14, padding: 28, width: 400 }}>
+            <h3 style={{ margin: '0 0 12px', color: '#ff9d7a' }}>Remove Source Team?</h3>
+            <p style={{ color: '#6b7a99', fontSize: 13, margin: '0 0 20px' }}>
+              This will remove <strong style={{ color: '#d8e0f0' }}>{deleteConfirm.source_team_name}</strong> from the team directory. This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setDeleteConfirm(null)} style={{ background: 'transparent', color: '#6b7a99', border: '1px solid #1a2030', padding: '9px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+              <button onClick={() => handleDeleteTeam(deleteConfirm)} disabled={deleting} style={{ background: '#c0392b', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
+                {deleting ? 'Removing...' : 'Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
