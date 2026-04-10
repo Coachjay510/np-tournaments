@@ -1,63 +1,143 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import Topbar from '../components/layout/Topbar'
-import { useTeams, usePaginatedTeams } from '../hooks/useTeams'
-import TeamOrgModal from '../components/teams/TeamOrgModal'
-import TeamMergeModal from '../components/teams/TeamMergeModal'
+import { useTeamsAdmin } from '../hooks/useTeamsAdmin'
+
+function StatCard({ label, value, accent = '#f0f4ff' }) {
+  return (
+    <div
+      style={{
+        background: '#080c12',
+        border: '1px solid #1a2030',
+        borderRadius: 12,
+        padding: 16,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          textTransform: 'uppercase',
+          letterSpacing: '1.2px',
+          color: '#4a5568',
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: 'Anton, sans-serif',
+          fontSize: 30,
+          color: accent,
+          lineHeight: 1,
+          letterSpacing: '0.5px',
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  )
+}
+
+function badgeStyle(linked) {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '4px 10px',
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: '0.4px',
+    background: linked ? '#0d1a0a' : '#2a130f',
+    color: linked ? '#5cb800' : '#ffb38a',
+    border: linked ? '1px solid #1a3a0a' : '1px solid #4b251d',
+  }
+}
+
+const PER_PAGE = 20
 
 export default function Teams() {
-  const { teams, loading, error, refresh } = useTeams()
+  const { teams, loading, error, refresh } = useTeamsAdmin()
 
   const [search, setSearch] = useState('')
+  const [source, setSource] = useState('all')
+  const [division, setDivision] = useState('all')
+  const [linkStatus, setLinkStatus] = useState('all')
   const [page, setPage] = useState(1)
-  const [sortBy, setSortBy] = useState('display_name')
-  const [sortDirection, setSortDirection] = useState('asc')
-  const [singleOrgTeam, setSingleOrgTeam] = useState(null)
-  const [singleMergeTeam, setSingleMergeTeam] = useState(null)
 
-  const pageSize = 25
-
-  const { rows, total, totalPages } = usePaginatedTeams(
-    teams,
-    page,
-    pageSize,
-    search,
-    sortBy,
-    sortDirection
-  )
-
-  const stats = useMemo(() => {
-    const orgCount = new Set(
-      teams.map((t) => t.organization_name).filter(Boolean)
-    ).size
-
-    const divisions = new Set(
-      teams.map((t) => t.ranking_division_key).filter(Boolean)
-    ).size
-
-    return {
-      totalTeams: teams.length,
-      orgCount,
-      divisions,
-    }
+  const divisionOptions = useMemo(() => {
+    const values = [...new Set((teams || []).map((t) => t.ranking_division_key).filter(Boolean))]
+    return values.sort((a, b) => a.localeCompare(b))
   }, [teams])
 
-  function handleSort(field) {
-    if (sortBy === field) {
-      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortBy(field)
-      setSortDirection('asc')
+  const filteredTeams = useMemo(() => {
+    let rows = [...(teams || [])]
+
+    if (source !== 'all') {
+      rows = rows.filter((row) => row.ranking_source === source)
     }
+
+    if (division !== 'all') {
+      rows = rows.filter((row) => row.ranking_division_key === division)
+    }
+
+    if (linkStatus !== 'all') {
+      rows = rows.filter((row) =>
+        linkStatus === 'linked' ? !!row.master_team_id : !row.master_team_id
+      )
+    }
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      rows = rows.filter(
+        (row) =>
+          row.source_team_name?.toLowerCase().includes(q) ||
+          row.bt_master_teams?.display_name?.toLowerCase().includes(q)
+      )
+    }
+
+    rows.sort((a, b) => {
+      const sourceCompare = (a.ranking_source || '').localeCompare(b.ranking_source || '')
+      if (sourceCompare !== 0) return sourceCompare
+
+      const divisionCompare = (a.ranking_division_key || '').localeCompare(b.ranking_division_key || '')
+      if (divisionCompare !== 0) return divisionCompare
+
+      return (a.source_team_name || '').localeCompare(b.source_team_name || '')
+    })
+
+    return rows
+  }, [teams, source, division, linkStatus, search])
+
+  const totalPages = Math.max(1, Math.ceil(filteredTeams.length / PER_PAGE))
+
+  const pagedTeams = useMemo(() => {
+    const start = (page - 1) * PER_PAGE
+    return filteredTeams.slice(start, start + PER_PAGE)
+  }, [filteredTeams, page])
+
+  const linkedCount = filteredTeams.filter((t) => !!t.master_team_id).length
+  const unlinkedCount = filteredTeams.filter((t) => !t.master_team_id).length
+
+  const uniqueMasters = new Set(
+    filteredTeams.map((t) => t.master_team_id).filter(Boolean)
+  ).size
+
+  function goPrev() {
+    setPage((p) => Math.max(1, p - 1))
   }
 
-  function sortArrow(field) {
-    if (sortBy !== field) return '↕'
-    return sortDirection === 'asc' ? '↑' : '↓'
+  function goNext() {
+    setPage((p) => Math.min(totalPages, p + 1))
+  }
+
+  function resetPageAndSet(setter, value) {
+    setPage(1)
+    setter(value)
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <Topbar
         title="TEAMS"
         actions={
@@ -67,40 +147,23 @@ export default function Teams() {
               background: '#5cb800',
               color: '#04060a',
               border: 'none',
-              padding: '10px 16px',
+              padding: '8px 16px',
               borderRadius: 8,
+              fontSize: 13,
               fontWeight: 700,
-              cursor: 'pointer',
             }}
           >
-            Refresh
+            Refresh Teams
           </button>
         }
       />
 
-      <div style={{ padding: 24 }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 16,
-            marginBottom: 20,
-          }}
-        >
-          <div style={cardStyle}>
-            <div style={labelStyle}>Master Teams</div>
-            <div style={valueStyle}>{stats.totalTeams}</div>
-          </div>
-
-          <div style={cardStyle}>
-            <div style={labelStyle}>Organizations</div>
-            <div style={valueStyle}>{stats.orgCount}</div>
-          </div>
-
-          <div style={cardStyle}>
-            <div style={labelStyle}>Divisions</div>
-            <div style={valueStyle}>{stats.divisions}</div>
-          </div>
+      <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+          <StatCard label="Source Teams" value={filteredTeams.length || 0} accent="#5cb800" />
+          <StatCard label="Master Teams" value={uniqueMasters || 0} />
+          <StatCard label="Linked" value={linkedCount || 0} accent="#d4a017" />
+          <StatCard label="Unlinked" value={unlinkedCount || 0} accent="#ff9d7a" />
         </div>
 
         <div
@@ -111,266 +174,215 @@ export default function Teams() {
             overflow: 'hidden',
           }}
         >
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid #1a2030' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#c0cce0', letterSpacing: '0.3px' }}>
+              TEAM DIRECTORY + MASTER MAPPING
+            </div>
+            <div style={{ fontSize: 11, color: '#4a5568', marginTop: 4 }}>
+              Review source teams, master team links, and prep merge work
+            </div>
+          </div>
+
           <div
             style={{
-              padding: 16,
+              padding: 18,
               borderBottom: '1px solid #1a2030',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
+              display: 'grid',
+              gridTemplateColumns: '2fr 1fr 1fr 1fr',
               gap: 12,
             }}
           >
             <input
+              type="text"
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                setPage(1)
-              }}
-              placeholder="Search team, org, division, or source..."
+              onChange={(e) => resetPageAndSet(setSearch, e.target.value)}
+              placeholder="Search team name or master team..."
               style={{
-                width: 360,
+                width: '100%',
                 background: '#0e1320',
                 border: '1px solid #1a2030',
                 color: '#d8e0f0',
                 borderRadius: 8,
                 padding: '10px 12px',
+                fontSize: 13,
+                outline: 'none',
               }}
             />
 
-            <div style={{ color: '#6b7a99', fontSize: 13 }}>
-              Showing {rows.length} of {total} teams
-            </div>
+            <select
+              value={source}
+              onChange={(e) => resetPageAndSet(setSource, e.target.value)}
+              style={{
+                width: '100%',
+                background: '#0e1320',
+                border: '1px solid #1a2030',
+                color: '#d8e0f0',
+                borderRadius: 8,
+                padding: '10px 12px',
+                fontSize: 13,
+                outline: 'none',
+              }}
+            >
+              <option value="all">All Sources</option>
+              <option value="Covert Hoops">Covert Hoops</option>
+              <option value="Nothing But Net">Nothing But Net</option>
+            </select>
+
+            <select
+              value={division}
+              onChange={(e) => resetPageAndSet(setDivision, e.target.value)}
+              style={{
+                width: '100%',
+                background: '#0e1320',
+                border: '1px solid #1a2030',
+                color: '#d8e0f0',
+                borderRadius: 8,
+                padding: '10px 12px',
+                fontSize: 13,
+                outline: 'none',
+              }}
+            >
+              <option value="all">All Divisions</option>
+              {divisionOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={linkStatus}
+              onChange={(e) => resetPageAndSet(setLinkStatus, e.target.value)}
+              style={{
+                width: '100%',
+                background: '#0e1320',
+                border: '1px solid #1a2030',
+                color: '#d8e0f0',
+                borderRadius: 8,
+                padding: '10px 12px',
+                fontSize: 13,
+                outline: 'none',
+              }}
+            >
+              <option value="all">All Link Status</option>
+              <option value="linked">Linked</option>
+              <option value="unlinked">Unlinked</option>
+            </select>
           </div>
 
-          {loading ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#6b7a99' }}>
-              Loading teams...
+          {error ? (
+            <div style={{ padding: 24, color: '#e05555', fontSize: 13 }}>
+              Error: {error.message}
             </div>
-          ) : error ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#ff9d7a' }}>
-              {error.message}
+          ) : loading ? (
+            <div style={{ padding: 40, textAlign: 'center', color: '#4a5568', fontSize: 13 }}>
+              Loading teams...
             </div>
           ) : (
             <>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: '#0a0f1a' }}>
-                    {[
-                      ['display_name', 'Team'],
-                      ['source_names', 'Source'],
-                      ['organization_name', 'Organization'],
-                      ['ranking_division_key', 'Division'],
-                      ['source_count', 'Sources'],
-                    ].map(([field, label]) => (
-                      <th
-                        key={field}
-                        onClick={() => handleSort(field)}
-                        style={{ ...thStyle, cursor: 'pointer', userSelect: 'none' }}
-                      >
-                        {label} {sortArrow(field)}
-                      </th>
-                    ))}
-
-                    <th style={thStyle}>Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {rows.map((team) => (
-                    <tr
-                      key={team.row_key || String(team.master_team_id || team.display_name)}
-                      style={{ borderTop: '1px solid #121826' }}
-                    >
-                      <td style={cellStyle}>
-                        <div style={{ color: '#f0f4ff', fontWeight: 700 }}>
-                          {team.display_name}
-                        </div>
-                      </td>
-
-                      <td style={cellStyle}>
-                        <div style={{ color: '#c0cce0' }}>
-                          {team.source_names || '—'}
-                        </div>
-                      </td>
-
-                      <td style={cellStyle}>
-                        <div style={{ color: '#c0cce0' }}>
-                          {team.organization_name || '—'}
-                        </div>
-                      </td>
-
-                      <td style={cellStyle}>
-                        <div style={{ color: '#8fa3bf' }}>
-                          {team.ranking_division_key}
-                        </div>
-                      </td>
-
-                      <td style={cellStyle}>
-                        <div style={{ color: '#5cb800', fontWeight: 700 }}>
-                          {team.source_count}
-                        </div>
-                      </td>
-
-                      <td style={cellStyle}>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          <Link
-                            to={`/teams/${team.master_team_id}`}
-                            style={smallButtonStyle('#1e88ff')}
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#0a0f1a' }}>
+                      {['Source Team', 'Source', 'Division', 'Master Team', 'Master ID', 'Source Team ID', 'Status'].map(
+                        (label) => (
+                          <th
+                            key={label}
+                            style={{
+                              textAlign: 'left',
+                              padding: '12px 14px',
+                              fontSize: 11,
+                              color: '#6b7a99',
+                              textTransform: 'uppercase',
+                              letterSpacing: '1px',
+                              borderBottom: '1px solid #1a2030',
+                            }}
                           >
-                            View
-                          </Link>
-
-                          <button
-                            onClick={() =>
-                              setSingleOrgTeam({
-                                master_team_id: team.master_team_id,
-                                source_team_name: team.display_name,
-                                bt_master_teams: {
-                                  display_name: team.display_name,
-                                  organization_id: team.organization_id,
-                                },
-                              })
-                            }
-                            style={smallButtonStyle('#5f51ff')}
-                          >
-                            Org
-                          </button>
-
-                          <button
-                            onClick={() =>
-                              setSingleMergeTeam({
-                                id: team.linked_sources?.[0]?.id,
-                                source_team_name:
-                                  team.linked_sources?.[0]?.source_team_name || team.display_name,
-                                ranking_source: team.linked_sources?.[0]?.ranking_source,
-                                ranking_division_key: team.ranking_division_key,
-                                master_team_id: team.master_team_id,
-                              })
-                            }
-                            style={smallButtonStyle('#ff7a1a')}
-                          >
-                            Merge
-                          </button>
-                        </div>
-                      </td>
+                            {label}
+                          </th>
+                        )
+                      )}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {pagedTeams.map((team) => (
+                      <tr key={team.id} style={{ borderBottom: '1px solid #0e1320' }}>
+                        <td style={{ padding: '13px 14px', color: '#d8e0f0', fontWeight: 600 }}>
+                          {team.source_team_name}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.ranking_source}</td>
+                        <td style={{ padding: '13px 14px', color: '#6b7a99', fontSize: 12 }}>
+                          {team.ranking_division_key || '—'}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>
+                          {team.bt_master_teams?.display_name || '—'}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>
+                          {team.master_team_id || '—'}
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>
+                          {team.source_team_id}
+                        </td>
+                        <td style={{ padding: '13px 14px' }}>
+                          <span style={badgeStyle(!!team.master_team_id)}>
+                            {team.master_team_id ? 'Linked' : 'Unlinked'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               <div
                 style={{
+                  padding: 18,
                   display: 'flex',
-                  justifyContent: 'space-between',
                   alignItems: 'center',
-                  padding: 16,
+                  justifyContent: 'space-between',
                   borderTop: '1px solid #1a2030',
                 }}
               >
-                <div style={{ color: '#6b7a99', fontSize: 13 }}>
-                  Page {page} of {totalPages || 1}
+                <button
+                  onClick={goPrev}
+                  disabled={page === 1}
+                  style={{
+                    background: 'transparent',
+                    color: page === 1 ? '#3b4558' : '#d8e0f0',
+                    border: '1px solid #1a2030',
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    cursor: page === 1 ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Previous
+                </button>
+
+                <div style={{ color: '#6b7a99', fontSize: 12 }}>
+                  Page {page} of {totalPages}
                 </div>
 
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    style={buttonStyle}
-                  >
-                    Previous
-                  </button>
-
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages || 1, p + 1))}
-                    disabled={page === totalPages}
-                    style={buttonStyle}
-                  >
-                    Next
-                  </button>
-                </div>
+                <button
+                  onClick={goNext}
+                  disabled={page === totalPages}
+                  style={{
+                    background: 'transparent',
+                    color: page === totalPages ? '#3b4558' : '#d8e0f0',
+                    border: '1px solid #1a2030',
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    cursor: page === totalPages ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Next
+                </button>
               </div>
             </>
           )}
         </div>
       </div>
-
-      <TeamOrgModal
-        open={!!singleOrgTeam}
-        onClose={() => setSingleOrgTeam(null)}
-        team={singleOrgTeam}
-        onAssigned={() => {
-          setSingleOrgTeam(null)
-          refresh()
-        }}
-      />
-
-      <TeamMergeModal
-        open={!!singleMergeTeam}
-        onClose={() => setSingleMergeTeam(null)}
-        team={singleMergeTeam}
-        onMerged={() => {
-          setSingleMergeTeam(null)
-          refresh()
-        }}
-      />
     </div>
   )
-}
-
-const cardStyle = {
-  background: '#080c12',
-  border: '1px solid #1a2030',
-  borderRadius: 12,
-  padding: 18,
-}
-
-const labelStyle = {
-  color: '#6b7a99',
-  fontSize: 11,
-  textTransform: 'uppercase',
-  letterSpacing: '1px',
-  marginBottom: 8,
-}
-
-const valueStyle = {
-  color: '#f0f4ff',
-  fontSize: 30,
-  fontWeight: 700,
-}
-
-const thStyle = {
-  textAlign: 'left',
-  padding: '14px 16px',
-  color: '#6b7a99',
-  fontSize: 11,
-  textTransform: 'uppercase',
-  letterSpacing: '1px',
-}
-
-const cellStyle = {
-  padding: '14px 16px',
-}
-
-const buttonStyle = {
-  background: '#0e1320',
-  border: '1px solid #1a2030',
-  color: '#d8e0f0',
-  borderRadius: 8,
-  padding: '8px 12px',
-  cursor: 'pointer',
-}
-
-function smallButtonStyle(bg) {
-  return {
-    background: bg,
-    color: '#fff',
-    border: 'none',
-    padding: '8px 12px',
-    borderRadius: 8,
-    textDecoration: 'none',
-    cursor: 'pointer',
-    fontSize: 12,
-    fontWeight: 700,
-  }
 }

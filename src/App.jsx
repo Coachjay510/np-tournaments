@@ -14,6 +14,8 @@ import Organizations from './pages/Organizations'
 import OrganizationDetail from './pages/OrganizationDetail'
 import Schedule from './pages/Schedule'
 import RefPortal from './pages/RefPortal'
+import Venues from './pages/Venues'
+import VenueDetail from './pages/VenueDetail'
 
 export default function App() {
   const { director, loading } = useDirector()
@@ -51,13 +53,27 @@ export default function App() {
         >
           <Route path="/" element={<Dashboard director={director} />} />
           <Route path="/tournaments" element={<Tournaments director={director} />} />
-          <Route path="/tournaments/:id" element={<TournamentDetail director={director} />} />
-          <Route path="/registrations" element={<Registrations director={director} />} />
+          <Route
+            path="/tournaments/:id"
+            element={<TournamentDetail director={director} />}
+          />
+          <Route path="/venues" element={<Venues director={director} />} />
+          <Route path="/venues/:venueId" element={<VenueDetail director={director} />} />
+          <Route
+            path="/registrations"
+            element={<Registrations director={director} />}
+          />
           <Route path="/rankings" element={<Rankings director={director} />} />
           <Route path="/teams" element={<Teams director={director} />} />
           <Route path="/teams/:teamId" element={<TeamDetail director={director} />} />
-          <Route path="/organizations" element={<Organizations director={director} />} />
-          <Route path="/organizations/:orgId" element={<OrganizationDetail director={director} />} />
+          <Route
+            path="/organizations"
+            element={<Organizations director={director} />}
+          />
+          <Route
+            path="/organizations/:orgId"
+            element={<OrganizationDetail director={director} />}
+          />
           <Route path="/schedule" element={<Schedule director={director} />} />
           <Route path="/ref-portal" element={<RefPortal director={director} />} />
         </Route>
