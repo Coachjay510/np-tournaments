@@ -405,12 +405,8 @@ export default function TournamentDetail({ director }) {
   async function handleRemoveTeam(teamId) {
     try {
       const { error } = await supabase
-        .from('teams')
-        .update({
-          tournament_id: null,
-          custom_entry_fee: null,
-          team_notes: null,
-        })
+        .from('tournament_teams')
+        .delete()
         .eq('id', teamId)
 
       if (error) throw error
