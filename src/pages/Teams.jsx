@@ -33,17 +33,17 @@ const btnStyle = (color) => ({
 })
 
 const SORT_OPTIONS = [
+  { value: 'source_asc', label: 'Team Name A→Z' },
+  { value: 'source_desc', label: 'Team Name Z→A' },
   { value: 'master_asc', label: 'Master Team A→Z' },
   { value: 'master_desc', label: 'Master Team Z→A' },
-  { value: 'source_asc', label: 'Source Team A→Z' },
-  { value: 'source_desc', label: 'Source Team Z→A' },
   { value: 'division_asc', label: 'Division A→Z' },
   { value: 'org_asc', label: 'Org A→Z' },
   { value: 'status_linked', label: 'Linked First' },
   { value: 'status_unlinked', label: 'Unlinked First' },
 ]
 
-const PER_PAGE = 20
+const PER_PAGE = 25
 
 export default function Teams() {
   const navigate = useNavigate()
@@ -53,7 +53,7 @@ export default function Teams() {
   const [source, setSource] = useState('all')
   const [division, setDivision] = useState('all')
   const [linkStatus, setLinkStatus] = useState('all')
-  const [sortBy, setSortBy] = useState('master_asc')
+  const [sortBy, setSortBy] = useState('source_asc')
   const [page, setPage] = useState(1)
   const [mergeTeam, setMergeTeam] = useState(null)
   const [orgTeam, setOrgTeam] = useState(null)
@@ -74,25 +74,24 @@ export default function Teams() {
       const q = search.trim().toLowerCase()
       rows = rows.filter((row) =>
         row.source_team_name?.toLowerCase().includes(q) ||
-        row.bt_master_teams?.display_name?.toLowerCase().includes(q)
+        row.bt_master_teams?.display_name?.toLowerCase().includes(q) ||
+        row.bt_master_teams?.bt_organizations?.org_name?.toLowerCase().includes(q)
       )
     }
 
     rows.sort((a, b) => {
+      const aSource = a.source_team_name || ''
+      const bSource = b.source_team_name || ''
       const aMaster = a.bt_master_teams?.display_name || ''
       const bMaster = b.bt_master_teams?.display_name || ''
       const aOrg = a.bt_master_teams?.bt_organizations?.org_name || ''
       const bOrg = b.bt_master_teams?.bt_organizations?.org_name || ''
 
       switch (sortBy) {
-        case 'master_asc': {
-          const mc = aMaster.localeCompare(bMaster)
-          if (mc !== 0) return mc
-          return (a.ranking_division_key || '').localeCompare(b.ranking_division_key || '')
-        }
+        case 'source_asc': return aSource.localeCompare(bSource)
+        case 'source_desc': return bSource.localeCompare(aSource)
+        case 'master_asc': return aMaster.localeCompare(bMaster)
         case 'master_desc': return bMaster.localeCompare(aMaster)
-        case 'source_asc': return (a.source_team_name || '').localeCompare(b.source_team_name || '')
-        case 'source_desc': return (b.source_team_name || '').localeCompare(a.source_team_name || '')
         case 'division_asc': return (a.ranking_division_key || '').localeCompare(b.ranking_division_key || '')
         case 'org_asc': return aOrg.localeCompare(bOrg)
         case 'status_linked': return (b.master_team_id ? 1 : 0) - (a.master_team_id ? 1 : 0)
@@ -106,14 +105,7 @@ export default function Teams() {
 
   const pagedTeams = useMemo(() => {
     const start = (page - 1) * PER_PAGE
-    const slice = filteredTeams.slice(start, start + PER_PAGE)
-    const seen = new Set()
-    return slice.map((team) => {
-      const key = team.master_team_id ? `m-${team.master_team_id}` : `s-${team.id}`
-      const isFirst = !seen.has(key)
-      seen.add(key)
-      return { ...team, _isFirstOfGroup: isFirst }
-    })
+    return filteredTeams.slice(start, start + PER_PAGE)
   }, [filteredTeams, page])
 
   const totalPages = Math.max(1, Math.ceil(filteredTeams.length / PER_PAGE))
@@ -127,10 +119,7 @@ export default function Teams() {
 
   async function handleDeleteTeam(team) {
     setDeleting(true)
-    if (team.master_team_id) {
-      // Delete the source link row
-      await supabase.from('bt_team_links').delete().eq('id', team.id)
-    }
+    await supabase.from('bt_team_links').delete().eq('id', team.id)
     setDeleting(false)
     setDeleteConfirm(null)
     refresh()
@@ -163,11 +152,11 @@ export default function Teams() {
         <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ padding: '14px 18px', borderBottom: '1px solid #1a2030' }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#c0cce0', letterSpacing: '0.3px' }}>TEAM DIRECTORY + MASTER MAPPING</div>
-            <div style={{ fontSize: 11, color: '#4a5568', marginTop: 4 }}>Grouped by master team — source teams listed below each master</div>
+            <div style={{ fontSize: 11, color: '#4a5568', marginTop: 4 }}>Source team names shown · Master team listed as reference</div>
           </div>
 
           <div style={{ padding: 18, borderBottom: '1px solid #1a2030', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 12 }}>
-            <input type="text" value={search} onChange={(e) => resetPageAndSet(setSearch, e.target.value)} placeholder="Search team name or master team..." style={inputStyle} />
+            <input type="text" value={search} onChange={(e) => resetPageAndSet(setSearch, e.target.value)} placeholder="Search team, master team, or org..." style={inputStyle} />
             <select value={source} onChange={(e) => resetPageAndSet(setSource, e.target.value)} style={inputStyle}>
               <option value="all">All Sources</option>
               <option value="Covert Hoops">Covert Hoops</option>
@@ -197,7 +186,7 @@ export default function Teams() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: '#0a0f1a' }}>
-                      {['Master Team', 'Source Team', 'Source', 'Division', 'Org', 'Master ID', 'Source ID', 'Status', 'Actions'].map((label) => (
+                      {['Team Name', 'Source', 'Division', 'Org', 'Master Team', 'Master ID', 'Source ID', 'Status', 'Actions'].map((label) => (
                         <th key={label} style={{ textAlign: 'left', padding: '12px 14px', fontSize: 11, color: '#6b7a99', textTransform: 'uppercase', letterSpacing: '1px', borderBottom: '1px solid #1a2030' }}>
                           {label}
                         </th>
@@ -206,23 +195,25 @@ export default function Teams() {
                   </thead>
                   <tbody>
                     {pagedTeams.map((team) => (
-                      <tr key={team.id} style={{
-                        borderBottom: '1px solid #0e1320',
-                        borderTop: team._isFirstOfGroup && team.master_team_id ? '1px solid #1a2030' : 'none',
-                      }}>
-                        <td style={{ padding: '13px 14px', fontWeight: 700, fontSize: 13, color: '#5cb800' }}>
-                          {team._isFirstOfGroup ? (team.bt_master_teams?.display_name || '—') : ''}
-                        </td>
-                        <td style={{ padding: '13px 14px', paddingLeft: team.master_team_id ? 28 : 14, color: '#d8e0f0', fontWeight: 600 }}>
-                          {team.source_team_name}
+                      <tr key={team.id} style={{ borderBottom: '1px solid #0e1320' }}>
+                        {/* Primary: source team name */}
+                        <td style={{ padding: '13px 14px', color: '#f0f4ff', fontWeight: 700 }}>
+                          {team.source_team_name || '—'}
                         </td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>{team.ranking_source}</td>
                         <td style={{ padding: '13px 14px', color: '#6b7a99', fontSize: 12 }}>{team.ranking_division_key || '—'}</td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>
                           {team.bt_master_teams?.bt_organizations?.org_name || <span style={{ color: '#4a5568' }}>No org</span>}
                         </td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>{team.master_team_id || '—'}</td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>{team.source_team_id}</td>
+                        {/* Master team as reference */}
+                        <td style={{ padding: '13px 14px', fontSize: 12 }}>
+                          {team.bt_master_teams?.display_name
+                            ? <span style={{ color: '#5cb800' }}>{team.bt_master_teams.display_name}</span>
+                            : <span style={{ color: '#4a5568' }}>No master</span>
+                          }
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#4a5568', fontSize: 12 }}>{team.master_team_id || '—'}</td>
+                        <td style={{ padding: '13px 14px', color: '#4a5568', fontSize: 12 }}>{team.source_team_id}</td>
                         <td style={{ padding: '13px 14px' }}>
                           <span style={badgeStyle(!!team.master_team_id)}>
                             {team.master_team_id ? 'Linked' : 'Unlinked'}
