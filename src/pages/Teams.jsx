@@ -42,7 +42,6 @@ export default function Teams() {
   const [division, setDivision] = useState('all')
   const [linkStatus, setLinkStatus] = useState('all')
   const [page, setPage] = useState(1)
-
   const [mergeTeam, setMergeTeam] = useState(null)
   const [orgTeam, setOrgTeam] = useState(null)
 
@@ -63,9 +62,12 @@ export default function Teams() {
         row.bt_master_teams?.display_name?.toLowerCase().includes(q)
       )
     }
+    // Sort by master team name so merged source teams are grouped together
     rows.sort((a, b) => {
-      const sc = (a.ranking_source || '').localeCompare(b.ranking_source || '')
-      if (sc !== 0) return sc
+      const aMaster = a.bt_master_teams?.display_name || a.source_team_name || ''
+      const bMaster = b.bt_master_teams?.display_name || b.source_team_name || ''
+      const mc = aMaster.localeCompare(bMaster)
+      if (mc !== 0) return mc
       const dc = (a.ranking_division_key || '').localeCompare(b.ranking_division_key || '')
       if (dc !== 0) return dc
       return (a.source_team_name || '').localeCompare(b.source_team_name || '')
@@ -92,6 +94,9 @@ export default function Teams() {
     color: '#d8e0f0', borderRadius: 8, padding: '10px 12px', fontSize: 13, outline: 'none',
   }
 
+  // Track which master IDs we've already rendered a master row for
+  const renderedMasters = new Set()
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <Topbar
@@ -114,7 +119,7 @@ export default function Teams() {
         <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ padding: '14px 18px', borderBottom: '1px solid #1a2030' }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#c0cce0', letterSpacing: '0.3px' }}>TEAM DIRECTORY + MASTER MAPPING</div>
-            <div style={{ fontSize: 11, color: '#4a5568', marginTop: 4 }}>Review source teams, master team links, and prep merge work</div>
+            <div style={{ fontSize: 11, color: '#4a5568', marginTop: 4 }}>Grouped by master team — source teams listed below each master</div>
           </div>
 
           <div style={{ padding: 18, borderBottom: '1px solid #1a2030', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 12 }}>
@@ -145,7 +150,7 @@ export default function Teams() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: '#0a0f1a' }}>
-                      {['Source Team', 'Source', 'Division', 'Org', 'Master Team', 'Master ID', 'Source ID', 'Status', 'Actions'].map((label) => (
+                      {['Master Team', 'Source Team', 'Source', 'Division', 'Org', 'Master ID', 'Source ID', 'Status', 'Actions'].map((label) => (
                         <th key={label} style={{ textAlign: 'left', padding: '12px 14px', fontSize: 11, color: '#6b7a99', textTransform: 'uppercase', letterSpacing: '1px', borderBottom: '1px solid #1a2030' }}>
                           {label}
                         </th>
@@ -153,46 +158,46 @@ export default function Teams() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pagedTeams.map((team) => (
-                      <tr key={team.id} style={{ borderBottom: '1px solid #0e1320' }}>
-                        <td style={{ padding: '13px 14px', color: '#d8e0f0', fontWeight: 600 }}>{team.source_team_name}</td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.ranking_source}</td>
-                        <td style={{ padding: '13px 14px', color: '#6b7a99', fontSize: 12 }}>{team.ranking_division_key || '—'}</td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>
-                          {team.bt_master_teams?.bt_organizations?.org_name || <span style={{ color: '#4a5568' }}>No org</span>}
-                        </td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.bt_master_teams?.display_name || '—'}</td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.master_team_id || '—'}</td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.source_team_id}</td>
-                        <td style={{ padding: '13px 14px' }}>
-                          <span style={badgeStyle(!!team.master_team_id)}>
-                            {team.master_team_id ? 'Linked' : 'Unlinked'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '13px 14px' }}>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button
-                              style={btnStyle('blue')}
-                              onClick={() => navigate(`/teams/${team.master_team_id || team.id}`)}
-                            >
-                              View
-                            </button>
-                            <button
-                              style={btnStyle('orange')}
-                              onClick={() => setOrgTeam(team)}
-                            >
-                              Org
-                            </button>
-                            <button
-                              style={btnStyle('green')}
-                              onClick={() => setMergeTeam(team)}
-                            >
-                              Merge
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {pagedTeams.map((team) => {
+                      const masterId = team.master_team_id
+                      const masterName = team.bt_master_teams?.display_name
+                      const isFirstOfMaster = masterId && !renderedMasters.has(masterId)
+                      if (masterId) renderedMasters.add(masterId)
+
+                      return (
+                        <tr key={team.id} style={{
+                          borderBottom: '1px solid #0e1320',
+                          background: isFirstOfMaster ? 'rgba(92,184,0,0.03)' : 'transparent',
+                        }}>
+                          {/* Master Team — only show on first row of each master group */}
+                          <td style={{ padding: '13px 14px', color: isFirstOfMaster ? '#5cb800' : 'transparent', fontWeight: 700, fontSize: 13 }}>
+                            {isFirstOfMaster ? masterName || '—' : ''}
+                          </td>
+                          <td style={{ padding: '13px 14px', color: '#d8e0f0', fontWeight: 600, paddingLeft: masterId ? 28 : 14 }}>
+                            {team.source_team_name}
+                          </td>
+                          <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>{team.ranking_source}</td>
+                          <td style={{ padding: '13px 14px', color: '#6b7a99', fontSize: 12 }}>{team.ranking_division_key || '—'}</td>
+                          <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>
+                            {team.bt_master_teams?.bt_organizations?.org_name || <span style={{ color: '#4a5568' }}>No org</span>}
+                          </td>
+                          <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>{team.master_team_id || '—'}</td>
+                          <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>{team.source_team_id}</td>
+                          <td style={{ padding: '13px 14px' }}>
+                            <span style={badgeStyle(!!team.master_team_id)}>
+                              {team.master_team_id ? 'Linked' : 'Unlinked'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '13px 14px' }}>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button style={btnStyle('blue')} onClick={() => navigate(`/teams/${team.master_team_id || team.id}`)}>View</button>
+                              <button style={btnStyle('orange')} onClick={() => setOrgTeam(team)}>Org</button>
+                              <button style={btnStyle('green')} onClick={() => setMergeTeam(team)}>Merge</button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -201,7 +206,7 @@ export default function Teams() {
                 <button onClick={goPrev} disabled={page === 1} style={{ background: 'transparent', color: page === 1 ? '#3b4558' : '#d8e0f0', border: '1px solid #1a2030', padding: '8px 14px', borderRadius: 8, fontSize: 12, cursor: page === 1 ? 'not-allowed' : 'pointer' }}>
                   Previous
                 </button>
-                <div style={{ color: '#6b7a99', fontSize: 12 }}>Page {page} of {totalPages}</div>
+                <div style={{ color: '#6b7a99', fontSize: 12 }}>Page {page} of {totalPages} · {filteredTeams.length} teams</div>
                 <button onClick={goNext} disabled={page === totalPages} style={{ background: 'transparent', color: page === totalPages ? '#3b4558' : '#d8e0f0', border: '1px solid #1a2030', padding: '8px 14px', borderRadius: 8, fontSize: 12, cursor: page === totalPages ? 'not-allowed' : 'pointer' }}>
                   Next
                 </button>
