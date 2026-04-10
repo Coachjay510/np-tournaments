@@ -333,8 +333,8 @@ export default function TournamentDetail({ director }) {
       const payload = {
         tournament_id: id,
         payment_status: teamForm.payment_status,
-        registration_status: teamForm.registration_status,
-        team_notes: teamForm.notes || null,
+        approval_status: teamForm.registration_status,
+        notes: teamForm.notes || null,
         custom_entry_fee:
           teamForm.custom_entry_fee === ''
             ? null
@@ -342,7 +342,7 @@ export default function TournamentDetail({ director }) {
       }
 
       const { error } = await supabase
-        .from('teams')
+        .from('tournament_teams')
         .update(payload)
         .eq('id', teamForm.team_id)
 
@@ -373,8 +373,8 @@ export default function TournamentDetail({ director }) {
     try {
       const payload = {
         payment_status: teamForm.payment_status,
-        registration_status: teamForm.registration_status,
-        team_notes: teamForm.notes || null,
+        approval_status: teamForm.registration_status,
+        notes: teamForm.notes || null,
         custom_entry_fee:
           teamForm.custom_entry_fee === ''
             ? null
