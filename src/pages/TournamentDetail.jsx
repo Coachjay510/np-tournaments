@@ -106,7 +106,7 @@ export default function TournamentDetail({ director }) {
 
       supabase
         .from('tournament_teams')
-        .select('*')
+        .select('*, bt_master_teams(id, display_name, age_group, gender, ranking_division_key, bt_organizations(org_name))')
         .eq('tournament_id', id)
         .order('created_at', { ascending: false }),
 
@@ -388,7 +388,7 @@ export default function TournamentDetail({ director }) {
 
       if (error) throw error
 
-      await saveTeamConflict(selectedTournamentTeam.id)
+      await saveTeamConflict(selectedTournamentTeam.team_id)
 
       setShowEditTeamModal(false)
       setSelectedTournamentTeam(null)
