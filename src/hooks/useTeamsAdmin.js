@@ -35,7 +35,6 @@ export function useTeamsAdmin() {
         .order('source_team_name', { ascending: true })
 
       if (error) throw error
-
       setTeams(data || [])
     } catch (err) {
       console.error('Error loading teams:', err)
@@ -47,6 +46,19 @@ export function useTeamsAdmin() {
 
   useEffect(() => {
     fetchTeams()
+
+    // Realtime sync — re-fetch on any change to bt_team_links or bt_master_teams
+    const channel = supabase
+      .channel('teams-admin-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bt_team_links' }, () => {
+        fetchTeams()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bt_master_teams' }, () => {
+        fetchTeams()
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [fetchTeams])
 
   return {

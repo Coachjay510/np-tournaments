@@ -159,7 +159,7 @@ export default function Teams() {
                         <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.ranking_source}</td>
                         <td style={{ padding: '13px 14px', color: '#6b7a99', fontSize: 12 }}>{team.ranking_division_key || '—'}</td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>
-                          {team.bt_master_teams?.organizations?.name || <span style={{ color: '#4a5568' }}>No org</span>}
+                          {team.bt_master_teams?.bt_organizations?.org_name || <span style={{ color: '#4a5568' }}>No org</span>}
                         </td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.bt_master_teams?.display_name || '—'}</td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{team.master_team_id || '—'}</td>
