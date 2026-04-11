@@ -18,14 +18,14 @@ const s = {
 }
 
 // ── Bracket Visual ─────────────────────────────────────────────────────────
-function GameCard({ game, onEdit }) {
+function GameCard({ game, onEdit, courtsMap }) {
   const done = game.status === 'completed'
   const homeWon = done && game.winner_team_id === game.home_team_id
   const awayWon = done && game.winner_team_id === game.away_team_id
   return (
     <div style={{ background: '#0a0f1a', border: '1px solid #1a2030', borderRadius: 8, overflow: 'hidden', width: 190, flexShrink: 0 }}>
       <div style={{ padding: '3px 8px', borderBottom: '1px solid #1a2030', display: 'flex', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 9, color: '#4a5568' }}>{game.court_name || 'Court TBD'}</span>
+        <span style={{ fontSize: 9, color: (game.court_id && courtsMap?.[game.court_id]) ? '#4a9eff' : '#4a5568' }}>{(game.court_id && courtsMap?.[game.court_id]) || 'Court TBD'}</span>
         <span style={{ fontSize: 9, color: '#4a5568' }}>{game.scheduled_time || 'TBD'}</span>
       </div>
       {[{ name: game.home_team_name, score: game.home_score, won: homeWon },
@@ -40,15 +40,16 @@ function GameCard({ game, onEdit }) {
         </div>
       ))}
       {onEdit && (
-        <button onClick={() => onEdit(game)} style={{ width: '100%', padding: '3px', fontSize: 10, background: 'transparent', border: 'none', borderTop: '1px solid #1a2030', color: '#4a9eff', cursor: 'pointer' }}>
-          {done ? 'Edit Score' : 'Enter Score'}
-        </button>
+        <div style={{ display: 'flex', borderTop: '1px solid #1a2030' }}>
+          <button onClick={() => onEdit(game, 'score')} style={{ flex: 1, padding: '3px', fontSize: 10, background: 'transparent', border: 'none', borderRight: '1px solid #1a2030', color: '#4a9eff', cursor: 'pointer' }}>Score</button>
+          <button onClick={() => onEdit(game, 'edit')} style={{ flex: 1, padding: '3px', fontSize: 10, background: 'transparent', border: 'none', color: '#d4a017', cursor: 'pointer' }}>Edit</button>
+        </div>
       )}
     </div>
   )
 }
 
-function BracketView({ games, divisionKey, onEdit, onBack }) {
+function BracketView({ games, divisionKey, onEdit, onBack, courtsMap }) {
   const rounds = useMemo(() => {
     const map = {}
     games.forEach(g => {
@@ -88,7 +89,7 @@ function BracketView({ games, divisionKey, onEdit, onBack }) {
               <div key={poolName}>
                 <div style={{ fontSize: 12, color: '#d4a017', fontWeight: 700, marginBottom: 8 }}>{poolName}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {poolGames.map(g => <GameCard key={g.id} game={g} onEdit={onEdit} />)}
+                  {poolGames.map(g => <GameCard key={g.id} game={g} onEdit={onEdit} courtsMap={courtsMap} />)}
                 </div>
               </div>
             ))}
@@ -101,7 +102,7 @@ function BracketView({ games, divisionKey, onEdit, onBack }) {
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Round Robin</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {rrGames.map(g => <GameCard key={g.id} game={g} onEdit={onEdit} />)}
+            {rrGames.map(g => <GameCard key={g.id} game={g} onEdit={onEdit} courtsMap={courtsMap} />)}
           </div>
         </div>
       )}
@@ -114,7 +115,7 @@ function BracketView({ games, divisionKey, onEdit, onBack }) {
             {Object.entries(rounds).filter(([r]) => r !== 'Round Robin' && r !== 'Pool Play').map(([roundName, roundGames]) => (
               <div key={roundName} style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', minWidth: 200 }}>
                 <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7a99', marginBottom: 4 }}>{roundName}</div>
-                {roundGames.map(g => <GameCard key={g.id} game={g} onEdit={onEdit} />)}
+                {roundGames.map(g => <GameCard key={g.id} game={g} onEdit={onEdit} courtsMap={courtsMap} />)}
               </div>
             ))}
           </div>
@@ -124,6 +125,87 @@ function BracketView({ games, divisionKey, onEdit, onBack }) {
       {games.length === 0 && (
         <div style={{ padding: 40, textAlign: 'center', color: '#4a5568', fontSize: 13 }}>No games scheduled yet for this division</div>
       )}
+    </div>
+  )
+}
+
+
+// ── Edit Game Modal ────────────────────────────────────────────────────────
+function EditGameModal({ game, courts, teams, onSave, onDelete, onClose }) {
+  const [homeTeam, setHomeTeam] = useState(game.home_team_name || '')
+  const [awayTeam, setAwayTeam] = useState(game.away_team_name || '')
+  const [courtId, setCourtId] = useState(game.court_id || '')
+  const [date, setDate] = useState(game.scheduled_date || '')
+  const [time, setTime] = useState(game.scheduled_time || '')
+  const [saving, setSaving] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    await onSave(game.id, {
+      home_team_name: homeTeam,
+      away_team_name: awayTeam,
+      court_id: courtId || null,
+      scheduled_date: date || null,
+      scheduled_time: time || null,
+    })
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 14, padding: 28, width: 480 }}>
+        <h3 style={{ margin: '0 0 4px', color: '#f0f4ff' }}>Edit Game</h3>
+        <div style={{ fontSize: 12, color: '#4a5568', marginBottom: 20 }}>{game.round} {game.bracket_slot ? `· ${game.bracket_slot}` : ''} {game.pool_name ? `· ${game.pool_name}` : ''}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+          <div>
+            <label style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>Home Team</label>
+            <input value={homeTeam} onChange={e => setHomeTeam(e.target.value)}
+              style={{ width: '100%', background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none' }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>Away Team</label>
+            <input value={awayTeam} onChange={e => setAwayTeam(e.target.value)}
+              style={{ width: '100%', background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none' }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>Court</label>
+            <select value={courtId} onChange={e => setCourtId(e.target.value)}
+              style={{ width: '100%', background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none' }}>
+              <option value="">No court</option>
+              {courts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              style={{ width: '100%', background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none' }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>Time</label>
+            <input type="time" value={time} onChange={e => setTime(e.target.value)}
+              style={{ width: '100%', background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none' }} />
+          </div>
+        </div>
+        {confirmDel ? (
+          <div style={{ background: '#1f0707', border: '1px solid #3a0a0a', borderRadius: 8, padding: 12, marginBottom: 14 }}>
+            <div style={{ fontSize: 13, color: '#ff9d7a', marginBottom: 10 }}>Delete this game?</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => onDelete(game.id)} style={{ background: '#c0392b', color: '#fff', border: 'none', padding: '7px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Yes, Delete</button>
+              <button onClick={() => setConfirmDel(false)} style={{ background: 'transparent', color: '#6b7a99', border: '1px solid #1a2030', padding: '7px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+            </div>
+          </div>
+        ) : null}
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button onClick={() => setConfirmDel(true)} style={{ background: '#2a0f0f', color: '#ff9d7a', border: '1px solid #4b1d1d', padding: '9px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>🗑 Delete</button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={onClose} style={{ background: 'transparent', color: '#6b7a99', border: '1px solid #1a2030', padding: '9px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+            <button onClick={handleSave} disabled={saving} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -326,6 +408,7 @@ export default function Schedule({ director }) {
   const [view, setView] = useState('schedule') // 'schedule' | 'bracket'
   const [activeDivision, setActiveDivision] = useState(null)
   const [scoreGame, setScoreGame] = useState(null)
+  const [editGame, setEditGame] = useState(null)
   const [showScheduler, setShowScheduler] = useState(false)
 
   useEffect(() => {
@@ -415,6 +498,12 @@ export default function Schedule({ director }) {
     )
   }, [games, activeDivision, teams])
 
+  const courtsMap = useMemo(() => {
+    const map = {}
+    courts.forEach(c => { map[c.id] = c.name })
+    return map
+  }, [courts])
+
   const selectedTournament = tournaments.find(t => t.id === selectedTournamentId)
 
   return (
@@ -490,7 +579,7 @@ export default function Schedule({ director }) {
               <BracketView
                 games={divisionGames}
                 divisionKey={activeDivision}
-                onEdit={setScoreGame}
+                onEdit={(game, mode) => mode === 'edit' ? setEditGame(game) : setScoreGame(game)}
                 onBack={() => { setView('schedule'); setActiveDivision(null) }}
               />
             </div>
@@ -591,6 +680,25 @@ export default function Schedule({ director }) {
           </>
         )}
       </div>
+
+      {editGame && (
+        <EditGameModal
+          game={editGame}
+          courts={courts}
+          teams={teams}
+          onSave={async (gameId, updates) => {
+            await supabase.from('scheduled_games').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', gameId)
+            setEditGame(null)
+            loadAll(selectedTournamentId)
+          }}
+          onDelete={async (gameId) => {
+            await supabase.from('scheduled_games').delete().eq('id', gameId)
+            setEditGame(null)
+            loadAll(selectedTournamentId)
+          }}
+          onClose={() => setEditGame(null)}
+        />
+      )}
 
       {scoreGame && (
         <ScoreModal game={scoreGame} onSave={handleUpdateScore} onClose={() => setScoreGame(null)} />

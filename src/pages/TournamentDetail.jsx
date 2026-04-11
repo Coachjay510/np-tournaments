@@ -688,7 +688,14 @@ export default function TournamentDetail({ director }) {
             </Field>
 
             <Field label="Bracket Format">
-              <input value={form.bracket_format} onChange={(e) => updateField('bracket_format', e.target.value)} style={input} />
+              <select value={form.bracket_format} onChange={(e) => updateField('bracket_format', e.target.value)} style={input}>
+                <option value="">Select format</option>
+                <option value="single_elimination">Single Elimination</option>
+                <option value="double_elimination">Double Elimination</option>
+                <option value="pool_play">Pool Play Only</option>
+                <option value="pool_then_bracket">Pool Play → Bracket</option>
+                <option value="round_robin">Round Robin</option>
+              </select>
             </Field>
 
             <Field label="Registration Deadline">
