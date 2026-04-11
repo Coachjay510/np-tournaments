@@ -676,7 +676,6 @@ function generateConflictAwareGames({ teams, constraints, existingGames, startDa
     const hour = Math.floor(totalMins / 60) % 24
     const min = totalMins % 60
     return {
-      division_key: divisionKey,
       court_id: courtsToUse[courtIdx]?.id || null,
       scheduled_date: gameDate,
       scheduled_time: `${String(hour).padStart(2,'0')}:${String(min).padStart(2,'0')}`,
