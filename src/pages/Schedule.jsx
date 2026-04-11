@@ -337,7 +337,7 @@ export default function Schedule({ director }) {
   async function loadAll(tid) {
     setLoading(true)
     const [ttRes, constraintsRes, courtsRes, gamesRes] = await Promise.all([
-      supabase.from('tournament_teams').select('*, bt_master_teams(id, display_name, age_group, gender, ranking_division_key, bt_organizations(org_name))').eq('tournament_id', tid),
+      supabase.from('tournament_teams').select('*').eq('tournament_id', tid),
       supabase.from('tournament_team_constraints').select('*').eq('tournament_id', tid),
       supabase.from('venue_courts').select('*, venue_gyms(name), venues(name)').order('name'),
       supabase.from('scheduled_games').select('*').eq('tournament_id', tid).order('scheduled_date').order('scheduled_time'),
