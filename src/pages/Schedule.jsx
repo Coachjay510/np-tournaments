@@ -343,21 +343,23 @@ export default function Schedule({ director }) {
       supabase.from('scheduled_games').select('*').eq('tournament_id', tid).order('scheduled_date').order('scheduled_time'),
     ])
 
-    const masterMap = {}
-    ;(ttRes.data || []).forEach(tt => {
-      const m = tt.bt_master_teams
-      if (m) masterMap[m.id] = m
-    })
-
+    const teamIds = [...new Set((ttRes.data || []).map(t => Number(t.team_id)).filter(Boolean))]
+    let masterMap = {}
+    if (teamIds.length) {
+      const { data: masterData } = await supabase
+        .from('bt_master_teams')
+        .select('id, display_name, age_group, gender, ranking_division_key, bt_organizations(org_name)')
+        .in('id', teamIds)
+      ;(masterData || []).forEach(m => { masterMap[Number(m.id)] = m })
+    }
     const mergedTeams = (ttRes.data || []).map(tt => ({
       ...tt,
-      team_name: tt.bt_master_teams?.display_name || '—',
-      org_name: tt.bt_master_teams?.bt_organizations?.org_name || '—',
-      division_key: tt.bt_master_teams?.ranking_division_key || '—',
-      age_group: tt.bt_master_teams?.age_group || '—',
-      gender: tt.bt_master_teams?.gender || '—',
+      team_name: masterMap[Number(tt.team_id)]?.display_name || '—',
+      org_name: masterMap[Number(tt.team_id)]?.bt_organizations?.org_name || '—',
+      division_key: masterMap[Number(tt.team_id)]?.ranking_division_key || '—',
+      age_group: masterMap[Number(tt.team_id)]?.age_group || '—',
+      gender: masterMap[Number(tt.team_id)]?.gender || '—',
     }))
-
     const mergedCourts = (courtsRes.data || []).map(c => ({
       ...c,
       name: `${c.venues?.name || ''} - ${c.venue_gyms?.name || ''} - ${c.name}`.replace(/^ - | -  - /g, '').trim(),
