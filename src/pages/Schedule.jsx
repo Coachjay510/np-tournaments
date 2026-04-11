@@ -185,7 +185,11 @@ function AutoSchedulerPanel({ teams, constraints, courts, games, divisionKey, to
   }
 
   async function handleRun() {
-    if (!startDate || !selectedCourts.length || !divTeams.length) return
+    console.log('handleRun called', { startDate, selectedCourts, divTeams, divisionKey, teams })
+    if (!startDate || !selectedCourts.length || !divTeams.length) {
+      console.log('Early return:', { startDate, courtsLen: selectedCourts.length, divTeamsLen: divTeams.length })
+      return
+    }
     setRunning(true)
     setResult(null)
 
