@@ -34,6 +34,7 @@ export function useTeamsAdmin() {
         .order('ranking_division_key', { ascending: true })
         .order('source_team_name', { ascending: true })
         .limit(5000)
+        .limit(5000)
 
       if (error) throw error
       setTeams(data || [])
