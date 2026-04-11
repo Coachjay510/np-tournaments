@@ -166,12 +166,14 @@ export default function Teams() {
       <Topbar
         title="TEAMS"
         actions={
-          <button onClick={() => { setShowCreate(true); setCreateError(''); loadOrgs() }} style={{ background: '#1a2a4a', color: '#7eb3ff', border: '1px solid #1a3a6a', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-            + Create Team
-          </button>
-          <button onClick={refresh} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-            Refresh Teams
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => { setShowCreate(true); setCreateError(''); loadOrgs() }} style={{ background: '#1a2a4a', color: '#7eb3ff', border: '1px solid #1a3a6a', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              + Create Team
+            </button>
+            <button onClick={refresh} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              Refresh Teams
+            </button>
+          </div>
         }
       />
 
