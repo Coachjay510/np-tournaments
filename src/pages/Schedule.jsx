@@ -660,7 +660,6 @@ function generateConflictAwareGames({ teams, constraints, existingGames, startDa
       if (!usedSlots.has(slotKey)) {
         usedSlots.add(slotKey)
         return {
-          division_key: divisionKey,
           court_id: courtsToUse[courtIdx]?.id || null,
           scheduled_date: gameDate,
           scheduled_time: timeStr,
