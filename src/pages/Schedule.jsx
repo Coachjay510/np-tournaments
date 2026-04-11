@@ -167,7 +167,7 @@ function ScoreModal({ game, onSave, onClose }) {
 }
 
 // ── Auto Scheduler ─────────────────────────────────────────────────────────
-function AutoSchedulerPanel({ teams, constraints, courts, divisionKey, tournamentId, onScheduled }) {
+function AutoSchedulerPanel({ teams, constraints, courts, games, divisionKey, tournamentId, onScheduled }) {
   const [format, setFormat] = useState('pool_then_bracket')
   const [startDate, setStartDate] = useState('')
   const [startTime, setStartTime] = useState('08:00')
@@ -177,6 +177,8 @@ function AutoSchedulerPanel({ teams, constraints, courts, divisionKey, tournamen
   const [result, setResult] = useState(null)
 
   const divTeams = teams.filter(t => t.division_key === divisionKey)
+  // All existing games (other divisions) for court conflict avoidance
+  const existingGames = games || []
 
   function toggleCourt(id) {
     setSelectedCourts(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
@@ -188,9 +190,10 @@ function AutoSchedulerPanel({ teams, constraints, courts, divisionKey, tournamen
     setResult(null)
 
     const courtsToUse = courts.filter(c => selectedCourts.includes(c.id))
-    const games = generateConflictAwareGames({
+    const generatedGames = generateConflictAwareGames({
       teams: divTeams,
       constraints,
+      existingGames,
       startDate,
       startTime,
       courtsToUse,
@@ -200,13 +203,13 @@ function AutoSchedulerPanel({ teams, constraints, courts, divisionKey, tournamen
     })
 
     const { error } = await supabase.from('scheduled_games').insert(
-      games.map(g => ({ ...g, tournament_id: tournamentId, is_auto_scheduled: true }))
+      generatedGames.map(g => ({ ...g, tournament_id: tournamentId, is_auto_scheduled: true }))
     )
 
     if (error) {
       setResult({ type: 'error', msg: error.message })
     } else {
-      setResult({ type: 'success', msg: `Generated ${games.length} games!` })
+      setResult({ type: 'success', msg: `Generated ${generatedGames.length} games!` })
       onScheduled()
     }
     setRunning(false)
@@ -471,6 +474,7 @@ export default function Schedule({ director }) {
                   teams={teams}
                   constraints={constraints}
                   courts={courts}
+                  games={games}
                   divisionKey={activeDivision}
                   tournamentId={selectedTournamentId}
                   onScheduled={() => loadAll(selectedTournamentId)}
@@ -592,7 +596,14 @@ export default function Schedule({ director }) {
 }
 
 // ── Game Generation with Conflict Awareness ────────────────────────────────
-function generateConflictAwareGames({ teams, constraints, startDate, startTime, courtsToUse, format, gameDuration, divisionKey }) {
+function generateConflictAwareGames({ teams, constraints, existingGames, startDate, startTime, courtsToUse, format, gameDuration, divisionKey }) {
+  // Build a set of already-used court+time slots from other divisions
+  const usedSlots = new Set()
+  ;(existingGames || []).forEach(g => {
+    if (g.court_id && g.scheduled_date && g.scheduled_time) {
+      usedSlots.add(`${g.court_id}|${g.scheduled_date}|${g.scheduled_time}`)
+    }
+  })
   const games = []
   let slotIndex = 0
 
@@ -617,38 +628,54 @@ function generateConflictAwareGames({ teams, constraints, startDate, startTime, 
   }
 
   function getTimeSlot(idx, teamA, teamB) {
-    const courtIdx = idx % courtsToUse.length
-    const timeOffset = Math.floor(idx / courtsToUse.length) * gameDuration
-    const [h, m] = startTime.split(':').map(Number)
-
-    // Check if either team has time constraints
     const constraintA = constraintMap[String(teamA?.team_id)]
     const constraintB = constraintMap[String(teamB?.team_id)]
     const earliest = constraintA?.earliest_start_time || constraintB?.earliest_start_time
-    const latest = constraintA?.latest_start_time || constraintB?.latest_start_time
-
-    let totalMins = h * 60 + m + timeOffset
-    if (earliest) {
-      const [eh, em] = earliest.split(':').map(Number)
-      const earliestMins = eh * 60 + em
-      if (totalMins < earliestMins) totalMins = earliestMins
-    }
-
-    const hour = Math.floor(totalMins / 60) % 24
-    const min = totalMins % 60
-
-    // Determine date based on preferred day
     const preferredDayA = constraintA?.has_conflicts ? constraintA.preferred_day : null
     const preferredDayB = constraintB?.has_conflicts ? constraintB.preferred_day : null
     const preferredDay = preferredDayA || preferredDayB
     const gameDate = getDateForDay(preferredDay)
 
+    const [h, m] = startTime.split(':').map(Number)
+    let slotOffset = Math.floor(idx / courtsToUse.length)
+
+    // Find a slot that isn't already taken on any court
+    let found = false
+    let courtIdx = idx % courtsToUse.length
+    let attempts = 0
+    while (!found && attempts < 100) {
+      let totalMins = h * 60 + m + slotOffset * gameDuration
+      if (earliest) {
+        const [eh, em] = earliest.split(':').map(Number)
+        if (totalMins < eh * 60 + em) totalMins = eh * 60 + em
+      }
+      const hour = Math.floor(totalMins / 60) % 24
+      const min = totalMins % 60
+      const timeStr = `${String(hour).padStart(2,'0')}:${String(min).padStart(2,'0')}`
+      const slotKey = `${courtsToUse[courtIdx]?.id}|${gameDate}|${timeStr}`
+      if (!usedSlots.has(slotKey)) {
+        usedSlots.add(slotKey)
+        return {
+          division_key: divisionKey,
+          court_id: courtsToUse[courtIdx]?.id || null,
+          scheduled_date: gameDate,
+          scheduled_time: timeStr,
+          game_duration_mins: gameDuration,
+        }
+      }
+      courtIdx = (courtIdx + 1) % courtsToUse.length
+      if (courtIdx === 0) slotOffset++
+      attempts++
+    }
+    // Fallback
+    const totalMins = h * 60 + m + slotOffset * gameDuration
+    const hour = Math.floor(totalMins / 60) % 24
+    const min = totalMins % 60
     return {
       division_key: divisionKey,
       court_id: courtsToUse[courtIdx]?.id || null,
-      court_name: courtsToUse[courtIdx]?.name || null,
       scheduled_date: gameDate,
-      scheduled_time: `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`,
+      scheduled_time: `${String(hour).padStart(2,'0')}:${String(min).padStart(2,'0')}`,
       game_duration_mins: gameDuration,
     }
   }
