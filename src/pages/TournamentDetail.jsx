@@ -58,6 +58,8 @@ export default function TournamentDetail({ director }) {
   const [selectedTournamentTeam, setSelectedTournamentTeam] = useState(null)
   const [selectedDirectoryTeam, setSelectedDirectoryTeam] = useState(null)
   const [teamSearch, setTeamSearch] = useState('')
+  const [teamDivisionFilter, setTeamDivisionFilter] = useState('')
+  const [teamGenderFilter, setTeamGenderFilter] = useState('')
   const [copyName, setCopyName] = useState('')
 
   const [teamForm, setTeamForm] = useState(emptyTeamForm)
@@ -550,22 +552,20 @@ export default function TournamentDetail({ director }) {
 
   const filteredDirectoryTeams = useMemo(() => {
     const q = teamSearch.trim().toLowerCase()
-    if (!q) return directoryTeams
-
     return directoryTeams.filter((team) => {
+      if (teamDivisionFilter && team.ranking_division_key !== teamDivisionFilter) return false
+      if (teamGenderFilter && (team.gender || '').toLowerCase() !== teamGenderFilter.toLowerCase()) return false
+      if (!q) return true
       const name = (team.team_name || '').toLowerCase()
       const org = (team.org_name || '').toLowerCase()
       const age = (team.age_group || '').toLowerCase()
-      const gender = (team.gender || '').toLowerCase()
-
-      return (
-        name.includes(q) ||
-        org.includes(q) ||
-        age.includes(q) ||
-        gender.includes(q)
-      )
+      return name.includes(q) || org.includes(q) || age.includes(q)
     })
-  }, [directoryTeams, teamSearch])
+  }, [directoryTeams, teamSearch, teamDivisionFilter, teamGenderFilter])
+
+  const divisionOptions = useMemo(() => {
+    return [...new Set(directoryTeams.map(t => t.ranking_division_key).filter(Boolean))].sort()
+  }, [directoryTeams])
 
   if (loading) {
     return <div style={{ padding: 40, color: '#4a5568', fontSize: 13 }}>Loading...</div>
@@ -920,6 +920,8 @@ export default function TournamentDetail({ director }) {
             setShowAddTeamModal(false)
             setSelectedDirectoryTeam(null)
             setTeamForm(emptyTeamForm)
+            setTeamDivisionFilter('')
+            setTeamGenderFilter('')
           }}
         >
           {!selectedDirectoryTeam ? (
