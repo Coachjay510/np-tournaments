@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Topbar from '../components/layout/Topbar'
 import { useTournaments } from '../hooks/useTournaments'
+import { supabase } from '../supabaseClient'
 import { formatCurrency, formatDateRange, statusColor } from '../lib/utils'
 
 const STATUS_OPTIONS = ['draft','registration_open','registration_closed','in_progress','completed','cancelled']
@@ -32,12 +33,19 @@ export default function Tournaments({ director }) {
   const navigate = useNavigate()
   const { tournaments, loading, createTournament } = useTournaments(director?.id)
   const [showCreate, setShowCreate] = useState(false)
+  const [venues, setVenues] = useState([])
+  const [showNewVenue, setShowNewVenue] = useState(false)
+  const [newVenueName, setNewVenueName] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  useEffect(() => {
+    supabase.from('venues').select('id, name').order('name').then(({ data }) => setVenues(data || []))
+  }, [])
+
   const [form, setForm] = useState({
     name:'', slug:'', description:'', bracket_format:'pool_then_bracket',
-    venue_name:'', city:'', state:'', start_date:'', end_date:'',
+    venue_name:'', venue_id:'', city:'', state:'', start_date:'', end_date:'',
     registration_deadline:'', max_teams:32, registration_fee:150,
     is_public:true, require_approval:false, allow_waitlist:true,
   })
@@ -140,8 +148,20 @@ export default function Tournaments({ director }) {
             <Field label="City"><input value={form.city} onChange={e => set('city', e.target.value)} placeholder="Sacramento" style={inputStyle} /></Field>
             <Field label="State"><input value={form.state} onChange={e => set('state', e.target.value)} placeholder="CA" style={inputStyle} /></Field>
           </div>
-          <Field label="Venue Name">
-            <input value={form.venue_name} onChange={e => set('venue_name', e.target.value)} placeholder="Sacramento Sports Center" style={inputStyle} />
+          <Field label="Venue">
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select value={form.venue_id} onChange={e => { const v = venues.find(v => v.id === e.target.value); set('venue_id', e.target.value); if (v) set('venue_name', v.name) }} style={{ ...inputStyle, flex: 1 }}>
+                <option value="">Select a venue</option>
+                {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+              <button type="button" onClick={() => setShowNewVenue(!showNewVenue)} style={{ background: '#1a2a4a', color: '#7eb3ff', border: '1px solid #1a3a6a', padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>+ New</button>
+            </div>
+            {showNewVenue && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <input value={newVenueName} onChange={e => setNewVenueName(e.target.value)} placeholder="New venue name" style={{ ...inputStyle, flex: 1 }} />
+                <button type="button" onClick={async () => { if (!newVenueName.trim()) return; const { data } = await supabase.from('venues').insert({ name: newVenueName.trim() }).select().single(); if (data) { setVenues(prev => [...prev, data].sort((a,b) => a.name.localeCompare(b.name))); set('venue_id', data.id); set('venue_name', data.name); setNewVenueName(''); setShowNewVenue(false) } }} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Create</button>
+              </div>
+            )}
           </Field>
           <div style={col2}>
             <Field label="Max Teams"><input type="number" value={form.max_teams} onChange={e => set('max_teams', parseInt(e.target.value))} style={inputStyle} /></Field>

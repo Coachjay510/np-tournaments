@@ -14,6 +14,7 @@ const navItems = [
 
 const reportItems = [
   { to: '/analytics', icon: '📊', label: 'Analytics' },
+  { to: '/inventory', icon: '📦', label: 'Inventory' },
   { to: '/financials', icon: '💰', label: 'Financials' },
 ]
 
