@@ -97,22 +97,53 @@ function BracketView({ games, divisionKey, onEdit, onBack, courtsMap }) {
         </div>
       )}
 
-      {/* Round robin */}
+      {/* Round robin — clean table */}
       {rrGames.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Round Robin</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {rrGames.map(g => <GameCard key={g.id} game={g} onEdit={onEdit} courtsMap={courtsMap} />)}
+        <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid #1a2030' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#c0cce0' }}>Round Robin</span>
           </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#0a0f1a' }}>
+                <th style={thStyle}>#</th><th style={thStyle}>Home</th><th style={thStyle}>Away</th>
+                <th style={thStyle}>Court</th><th style={thStyle}>Time</th><th style={thStyle}>Score</th><th style={thStyle}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rrGames.map((g, idx) => (
+                <tr key={g.id}>
+                  <td style={{ ...tdStyle, color: '#4a5568' }}>{idx + 1}</td>
+                  <td style={{ ...tdStyle, fontWeight: 600 }}>{g.home_team_name}</td>
+                  <td style={tdStyle}>{g.away_team_name}</td>
+                  <td style={{ ...tdStyle, color: '#4a9eff', fontSize: 11 }}>{(courtsMap && g.court_id && courtsMap[g.court_id]) || '—'}</td>
+                  <td style={{ ...tdStyle, color: '#6b7a99', fontSize: 11 }}>{g.scheduled_time || '—'}</td>
+                  <td style={tdStyle}>
+                    {g.status === 'completed'
+                      ? <span style={{ color: '#5cb800', fontWeight: 700 }}>{g.home_score} - {g.away_score}</span>
+                      : <span style={{ color: '#4a5568' }}>—</span>}
+                  </td>
+                  <td style={tdStyle}>
+                    {onEdit && (
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button onClick={() => onEdit(g, 'score')} style={{ padding: '3px 8px', borderRadius: 4, fontSize: 10, background: '#071525', color: '#4a9eff', border: '1px solid #0a2540', cursor: 'pointer' }}>Score</button>
+                        <button onClick={() => onEdit(g, 'edit')} style={{ padding: '3px 8px', borderRadius: 4, fontSize: 10, background: '#1a1500', color: '#d4a017', border: '1px solid #3a3000', cursor: 'pointer' }}>Edit</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* Bracket rounds */}
+      {/* Bracket rounds — only for elimination formats */}
       {bracketGames.length > 0 && (
         <div>
-          <div style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Bracket</div>
+          <div style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Elimination Bracket</div>
           <div style={{ display: 'flex', gap: 20, overflowX: 'auto', paddingBottom: 16 }}>
-            {Object.entries(rounds).filter(([r]) => r !== 'Round Robin' && r !== 'Pool Play').map(([roundName, roundGames]) => (
+            {Object.entries(rounds).filter(([r]) => !['Round Robin','Pool Play'].includes(r)).map(([roundName, roundGames]) => (
               <div key={roundName} style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', minWidth: 200 }}>
                 <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7a99', marginBottom: 4 }}>{roundName}</div>
                 {roundGames.map(g => <GameCard key={g.id} game={g} onEdit={onEdit} courtsMap={courtsMap} />)}
