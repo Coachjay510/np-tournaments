@@ -773,40 +773,49 @@ export default function TournamentDetail({ director }) {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: '10px 0' }}>
-            <select value={tournamentTeamDivFilter} onChange={e => setTournamentTeamDivFilter(e.target.value)} style={input}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "10px 0" }}>
+            <input placeholder="Search team or org..." value={ttSearch} onChange={e => setTtSearch(e.target.value)} style={input} />
+            <select value={ttDivFilter} onChange={e => setTtDivFilter(e.target.value)} style={input}>
               <option value="">All Divisions</option>
-              {[...new Set(teams.map(t => t.division_key || t.bt_master_teams?.ranking_division_key).filter(Boolean))].sort().map(d => <option key={d} value={d}>{d}</option>)}
+              {[...new Set(teams.map(t => t.division_key).filter(Boolean))].sort().map(d => <option key={d} value={d}>{d}</option>)}
             </select>
-            <select value={tournamentTeamGenderFilter} onChange={e => setTournamentTeamGenderFilter(e.target.value)} style={input}>
+            <select value={ttGenderFilter} onChange={e => setTtGenderFilter(e.target.value)} style={input}>
               <option value="">All Genders</option>
               <option value="Boys">Boys</option>
               <option value="Girls">Girls</option>
             </select>
+            <select value={ttPayFilter} onChange={e => setTtPayFilter(e.target.value)} style={input}>
+              <option value="">All Payments</option>
+              <option value="paid">Paid</option>
+              <option value="unpaid">Unpaid</option>
+            </select>
           </div>
-
-          {teams.filter(t => {
-            if (tournamentTeamDivFilter && (t.division_key || t.bt_master_teams?.ranking_division_key) !== tournamentTeamDivFilter) return false
-            if (tournamentTeamGenderFilter && (t.gender || t.bt_master_teams?.gender || '') !== tournamentTeamGenderFilter) return false
-            return true
-          }).length === 0 ? (
-            <div style={{ padding: 20, color: '#6b7a99' }}>No teams registered yet</div>
+          {teams.length === 0 ? (
+            <div style={{ padding: 20, color: "#6b7a99" }}>No teams registered yet</div>
+          ) : filteredSortedTT.length === 0 ? (
+            <div style={{ padding: 20, color: "#6b7a99" }}>No teams match filters</div>
           ) : (
             <table style={table}>
               <thead>
                 <tr>
-                  <th style={th}>Team</th>
-                  <th style={th}>Org</th>
-                  <th style={th}>Division</th>
+                  {[["team_name","Team"],["org_name","Org"],["division_key","Division"]].map(([f,l]) => (
+                    <th key={f} style={{ ...th, cursor: "pointer", color: ttSort.field===f ? "#5cb800" : "#6b7a99" }}
+                      onClick={() => setTtSort(p => ({ field: f, dir: p.field===f && p.dir==="asc" ? "desc" : "asc" }))}>
+                      {l}{ttSort.field===f ? (ttSort.dir==="asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                  ))}
                   <th style={th}>Registration</th>
-                  <th style={th}>Payment</th>
+                  <th style={{ ...th, cursor: "pointer", color: ttSort.field==="payment_status" ? "#5cb800" : "#6b7a99" }}
+                    onClick={() => setTtSort(p => ({ field: "payment_status", dir: p.field==="payment_status" && p.dir==="asc" ? "desc" : "asc" }))}>
+                    Payment{ttSort.field==="payment_status" ? (ttSort.dir==="asc" ? " ↑" : " ↓") : ""}
+                  </th>
                   <th style={th}>Custom Fee</th>
                   <th style={th}>Conflicts</th>
                   <th style={th}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {teams.map((team) => {
+                {filteredSortedTT.map((team) => {
                   const rc = statusColor(
                     team.registration_status === 'approved'
                       ? 'registration_open'
