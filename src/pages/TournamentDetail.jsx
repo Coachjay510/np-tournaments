@@ -60,6 +60,12 @@ export default function TournamentDetail({ director }) {
   const [teamSearch, setTeamSearch] = useState('')
   const [teamDivisionFilter, setTeamDivisionFilter] = useState('')
   const [teamGenderFilter, setTeamGenderFilter] = useState('')
+  const [tournamentTeamSearch, setTournamentTeamSearch] = useState('')
+  const [tournamentTeamDivFilter, setTournamentTeamDivFilter] = useState('')
+  const [tournamentTeamGenderFilter, setTournamentTeamGenderFilter] = useState('')
+  const [tournamentTeamPaymentFilter, setTournamentTeamPaymentFilter] = useState('')
+  const [teamDivisionFilter, setTeamDivisionFilter] = useState('')
+  const [teamGenderFilter, setTeamGenderFilter] = useState('')
   const [tournamentTeamDivFilter, setTournamentTeamDivFilter] = useState('')
   const [tournamentTeamGenderFilter, setTournamentTeamGenderFilter] = useState('')
   const [copyName, setCopyName] = useState('')
@@ -948,8 +954,19 @@ export default function TournamentDetail({ director }) {
                 placeholder="Search teams or orgs"
                 value={teamSearch}
                 onChange={(e) => setTeamSearch(e.target.value)}
-                style={{ ...input, marginBottom: 12 }}
+                style={{ ...input, marginBottom: 8 }}
               />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+                <select value={teamDivisionFilter} onChange={e => setTeamDivisionFilter(e.target.value)} style={input}>
+                  <option value="">All Divisions</option>
+                  {divisionOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+                <select value={teamGenderFilter} onChange={e => setTeamGenderFilter(e.target.value)} style={input}>
+                  <option value="">All Genders</option>
+                  <option value="Boys">Boys</option>
+                  <option value="Girls">Girls</option>
+                </select>
+              </div>
 
               <div style={{ color: '#6b7a99', fontSize: 12, marginBottom: 10 }}>
                 Showing {filteredDirectoryTeams.length} teams from directory
