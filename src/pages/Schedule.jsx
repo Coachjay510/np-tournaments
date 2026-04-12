@@ -130,6 +130,121 @@ function BracketView({ games, divisionKey, onEdit, onBack, courtsMap }) {
 }
 
 
+
+// ── Conflict Edit Modal ────────────────────────────────────────────────────
+function ConflictEditModal({ divisionKey, teams, constraints, tournamentId, onClose, onSaved }) {
+  const [saving, setSaving] = useState(false)
+  const [forms, setForms] = useState(() => {
+    const map = {}
+    teams.forEach(t => {
+      const c = constraints.find(c => String(c.team_id) === String(t.team_id)) || {}
+      map[t.team_id] = {
+        has_conflicts: c.has_conflicts || false,
+        preferred_day: c.preferred_day || '',
+        earliest_start_time: c.earliest_start_time || '',
+        latest_start_time: c.latest_start_time || '',
+        shared_coach_group: c.shared_coach_group || '',
+        min_rest_minutes: c.min_rest_minutes || 0,
+        existingId: c.id || null,
+      }
+    })
+    return map
+  })
+
+  function updateForm(teamId, field, value) {
+    setForms(prev => ({ ...prev, [teamId]: { ...prev[teamId], [field]: value } }))
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    for (const [teamId, form] of Object.entries(forms)) {
+      const payload = {
+        tournament_id: tournamentId,
+        team_id: Number(teamId),
+        has_conflicts: form.has_conflicts,
+        preferred_day: form.has_conflicts && form.preferred_day ? form.preferred_day : null,
+        earliest_start_time: form.has_conflicts && form.earliest_start_time ? form.earliest_start_time : null,
+        latest_start_time: form.has_conflicts && form.latest_start_time ? form.latest_start_time : null,
+        shared_coach_group: form.has_conflicts && form.shared_coach_group ? form.shared_coach_group : null,
+        min_rest_minutes: Number(form.min_rest_minutes) || 0,
+      }
+      if (form.existingId) {
+        await supabase.from('tournament_team_constraints').update(payload).eq('id', form.existingId)
+      } else {
+        await supabase.from('tournament_team_constraints').insert(payload)
+      }
+    }
+    setSaving(false)
+    onSaved()
+  }
+
+  const iStyle = { background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 6, padding: '6px 10px', fontSize: 12, outline: 'none', width: '100%' }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 14, padding: 28, width: 700, maxHeight: '85vh', overflowY: 'auto' }}>
+        <h3 style={{ margin: '0 0 4px', color: '#f0f4ff' }}>Edit Conflicts — {divisionKey}</h3>
+        <p style={{ color: '#4a5568', fontSize: 12, margin: '0 0 20px' }}>Set scheduling constraints for each team in this division</p>
+
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: '#0a0f1a' }}>
+              {['Team', 'Has Conflicts', 'Preferred Day', 'Earliest Time', 'Latest Time', 'Coach Group', 'Rest (min)'].map(h => (
+                <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 10, color: '#6b7a99', textTransform: 'uppercase', borderBottom: '1px solid #1a2030' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {teams.map(team => {
+              const form = forms[team.team_id] || {}
+              return (
+                <tr key={team.team_id} style={{ borderBottom: '1px solid #0e1320' }}>
+                  <td style={{ padding: '8px 10px', fontSize: 12, color: '#d8e0f0', fontWeight: 600 }}>{team.team_name}</td>
+                  <td style={{ padding: '8px 10px' }}>
+                    <input type="checkbox" checked={form.has_conflicts || false}
+                      onChange={e => updateForm(team.team_id, 'has_conflicts', e.target.checked)} />
+                  </td>
+                  <td style={{ padding: '8px 10px' }}>
+                    <select value={form.preferred_day || ''} onChange={e => updateForm(team.team_id, 'preferred_day', e.target.value)}
+                      disabled={!form.has_conflicts} style={iStyle}>
+                      <option value="">Any day</option>
+                      <option value="Saturday">Saturday only</option>
+                      <option value="Sunday">Sunday only</option>
+                    </select>
+                  </td>
+                  <td style={{ padding: '8px 10px' }}>
+                    <input type="time" value={form.earliest_start_time || ''} onChange={e => updateForm(team.team_id, 'earliest_start_time', e.target.value)}
+                      disabled={!form.has_conflicts} style={iStyle} />
+                  </td>
+                  <td style={{ padding: '8px 10px' }}>
+                    <input type="time" value={form.latest_start_time || ''} onChange={e => updateForm(team.team_id, 'latest_start_time', e.target.value)}
+                      disabled={!form.has_conflicts} style={iStyle} />
+                  </td>
+                  <td style={{ padding: '8px 10px' }}>
+                    <input value={form.shared_coach_group || ''} onChange={e => updateForm(team.team_id, 'shared_coach_group', e.target.value)}
+                      placeholder="e.g. A" disabled={!form.has_conflicts} style={iStyle} />
+                  </td>
+                  <td style={{ padding: '8px 10px' }}>
+                    <input type="number" value={form.min_rest_minutes || 0} onChange={e => updateForm(team.team_id, 'min_rest_minutes', e.target.value)}
+                      disabled={!form.has_conflicts} style={{ ...iStyle, width: 60 }} />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+          <button onClick={onClose} style={{ background: 'transparent', color: '#6b7a99', border: '1px solid #1a2030', padding: '9px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
+            {saving ? 'Saving...' : 'Save Conflicts'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Edit Game Modal ────────────────────────────────────────────────────────
 function EditGameModal({ game, courts, teams, onSave, onDelete, onClose }) {
   const [homeTeam, setHomeTeam] = useState(game.home_team_name || '')
@@ -409,6 +524,8 @@ export default function Schedule({ director }) {
   const [activeDivision, setActiveDivision] = useState(null)
   const [scoreGame, setScoreGame] = useState(null)
   const [editGame, setEditGame] = useState(null)
+  const [editConflict, setEditConflict] = useState(null)
+  const [editConflict, setEditConflict] = useState(null)
   const [showScheduler, setShowScheduler] = useState(false)
 
   useEffect(() => {
@@ -554,6 +671,12 @@ export default function Schedule({ director }) {
               <button onClick={() => setShowScheduler(!showScheduler)} style={s.btn('orange')}>
                 ⚡ {showScheduler ? 'Hide' : 'Show'} Auto Scheduler
               </button>
+              <button onClick={() => setEditConflict(activeDivision)} style={s.btn('blue')}>
+                ⚠ Edit Conflicts
+              </button>
+              <button onClick={() => setEditConflict(activeDivision)} style={s.btn('blue')}>
+                ⚠ Edit Conflicts
+              </button>
               {divisionGames.length > 0 && (
                 <button onClick={() => { if (confirm('Delete all games for this division?')) handleDeleteGames(activeDivision) }} style={s.btn('red')}>
                   🗑 Clear Games
@@ -681,6 +804,28 @@ export default function Schedule({ director }) {
         )}
       </div>
 
+      {editConflict && (
+        <ConflictEditModal
+          divisionKey={editConflict}
+          teams={teams.filter(t => t.division_key === editConflict)}
+          constraints={constraints}
+          tournamentId={selectedTournamentId}
+          onClose={() => setEditConflict(null)}
+          onSaved={() => { setEditConflict(null); loadAll(selectedTournamentId) }}
+        />
+      )}
+
+      {editConflict && (
+        <ConflictEditModal
+          divisionKey={editConflict}
+          teams={teams.filter(t => t.division_key === editConflict)}
+          constraints={constraints}
+          tournamentId={selectedTournamentId}
+          onClose={() => setEditConflict(null)}
+          onSaved={() => { setEditConflict(null); loadAll(selectedTournamentId) }}
+        />
+      )}
+
       {editGame && (
         <EditGameModal
           game={editGame}
@@ -804,7 +949,21 @@ function generateConflictAwareGames({ teams, constraints, existingGames, startDa
     }
   }
 
-  if (format === 'round_robin') {
+  if (format === 'two_games_guaranteed') {
+    // 3-team pools, everyone plays 2 games, no bracket
+    const poolSize = 3
+    const numPools = Math.ceil(sortedTeams.length / poolSize)
+    const pools = Array.from({ length: numPools }, () => [])
+    sortedTeams.forEach((team, idx) => { pools[idx % numPools].push(team) })
+    pools.forEach((pool, poolIdx) => {
+      const poolName = `Pool ${String.fromCharCode(65 + poolIdx)}`
+      for (let i = 0; i < pool.length; i++) {
+        for (let j = i + 1; j < pool.length; j++) {
+          games.push(makeGame(pool[i], pool[j], 'Pool Play', 1, { pool_name: poolName }))
+        }
+      }
+    })
+  } else if (format === 'round_robin') {
     for (let i = 0; i < sortedTeams.length; i++) {
       for (let j = i + 1; j < sortedTeams.length; j++) {
         games.push(makeGame(sortedTeams[i], sortedTeams[j], 'Round Robin', 1))
@@ -874,6 +1033,7 @@ function generateConflictAwareGames({ teams, constraints, existingGames, startDa
 }
 
 function estimateGames(format, n) {
+  if (format === 'two_games_guaranteed') return n * 2 / 3 * 3 // each team plays 2 games in 3-team pools
   if (!n) return '—'
   if (format === 'round_robin') return (n * (n - 1)) / 2
   if (format === 'single_elimination') return n - 1
