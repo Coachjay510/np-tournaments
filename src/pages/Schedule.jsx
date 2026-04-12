@@ -525,7 +525,6 @@ export default function Schedule({ director }) {
   const [scoreGame, setScoreGame] = useState(null)
   const [editGame, setEditGame] = useState(null)
   const [editConflict, setEditConflict] = useState(null)
-  const [editConflict, setEditConflict] = useState(null)
   const [showScheduler, setShowScheduler] = useState(false)
 
   useEffect(() => {
