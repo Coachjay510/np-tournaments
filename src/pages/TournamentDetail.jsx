@@ -60,6 +60,8 @@ export default function TournamentDetail({ director }) {
   const [teamSearch, setTeamSearch] = useState('')
   const [teamDivisionFilter, setTeamDivisionFilter] = useState('')
   const [teamGenderFilter, setTeamGenderFilter] = useState('')
+  const [tournamentTeamDivFilter, setTournamentTeamDivFilter] = useState('')
+  const [tournamentTeamGenderFilter, setTournamentTeamGenderFilter] = useState('')
   const [copyName, setCopyName] = useState('')
 
   const [teamForm, setTeamForm] = useState(emptyTeamForm)
@@ -751,7 +753,23 @@ export default function TournamentDetail({ director }) {
             </button>
           </div>
 
-          {teams.length === 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: '10px 0' }}>
+            <select value={tournamentTeamDivFilter} onChange={e => setTournamentTeamDivFilter(e.target.value)} style={input}>
+              <option value="">All Divisions</option>
+              {[...new Set(teams.map(t => t.division_key || t.bt_master_teams?.ranking_division_key).filter(Boolean))].sort().map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <select value={tournamentTeamGenderFilter} onChange={e => setTournamentTeamGenderFilter(e.target.value)} style={input}>
+              <option value="">All Genders</option>
+              <option value="Boys">Boys</option>
+              <option value="Girls">Girls</option>
+            </select>
+          </div>
+
+          {teams.filter(t => {
+            if (tournamentTeamDivFilter && (t.division_key || t.bt_master_teams?.ranking_division_key) !== tournamentTeamDivFilter) return false
+            if (tournamentTeamGenderFilter && (t.gender || t.bt_master_teams?.gender || '') !== tournamentTeamGenderFilter) return false
+            return true
+          }).length === 0 ? (
             <div style={{ padding: 20, color: '#6b7a99' }}>No teams registered yet</div>
           ) : (
             <table style={table}>
