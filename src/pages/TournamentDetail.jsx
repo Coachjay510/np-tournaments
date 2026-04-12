@@ -65,6 +65,10 @@ export default function TournamentDetail({ director }) {
   const [tournamentTeamGenderFilter, setTournamentTeamGenderFilter] = useState('')
   const [tournamentTeamPaymentFilter, setTournamentTeamPaymentFilter] = useState('')
   const [tournamentTeamSort, setTournamentTeamSort] = useState({ field: 'team_name', dir: 'asc' })
+  const [teamDivisionFilter, setTeamDivisionFilter] = useState('')
+  const [teamGenderFilter, setTeamGenderFilter] = useState('')
+  const [tournamentTeamDivFilter, setTournamentTeamDivFilter] = useState('')
+  const [tournamentTeamGenderFilter, setTournamentTeamGenderFilter] = useState('')
   const [copyName, setCopyName] = useState('')
 
   const [teamForm, setTeamForm] = useState(emptyTeamForm)
@@ -555,6 +559,8 @@ export default function TournamentDetail({ director }) {
     )
   }, [allTeams])
 
+  const divisionOptions = useMemo(() => [...new Set(directoryTeams.map(t => t.ranking_division_key).filter(Boolean))].sort(), [directoryTeams])
+
   const filteredDirectoryTeams = useMemo(() => {
     const q = teamSearch.trim().toLowerCase()
     return directoryTeams.filter((team) => {
@@ -756,63 +762,40 @@ export default function TournamentDetail({ director }) {
             </button>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, padding: "10px 0" }}>
-            <input placeholder="Search team or org..." value={tournamentTeamSearch} onChange={e => setTournamentTeamSearch(e.target.value)} style={input} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: '10px 0' }}>
             <select value={tournamentTeamDivFilter} onChange={e => setTournamentTeamDivFilter(e.target.value)} style={input}>
               <option value="">All Divisions</option>
-              {[...new Set(teams.map(t => t.division_key).filter(Boolean))].sort().map(d => <option key={d} value={d}>{d}</option>)}
+              {[...new Set(teams.map(t => t.division_key || t.bt_master_teams?.ranking_division_key).filter(Boolean))].sort().map(d => <option key={d} value={d}>{d}</option>)}
             </select>
             <select value={tournamentTeamGenderFilter} onChange={e => setTournamentTeamGenderFilter(e.target.value)} style={input}>
               <option value="">All Genders</option>
               <option value="Boys">Boys</option>
               <option value="Girls">Girls</option>
             </select>
-            <select value={tournamentTeamPaymentFilter} onChange={e => setTournamentTeamPaymentFilter(e.target.value)} style={input}>
-              <option value="">All Payments</option>
-              <option value="paid">Paid</option>
-              <option value="unpaid">Unpaid</option>
-            </select>
-          {(() => {
-            const filtered = teams.filter(t => {
-              if (tournamentTeamDivFilter && t.division_key !== tournamentTeamDivFilter) return false
-              if (tournamentTeamGenderFilter && t.gender !== tournamentTeamGenderFilter) return false
-              if (tournamentTeamPaymentFilter && t.payment_status !== tournamentTeamPaymentFilter) return false
-              if (tournamentTeamSearch) { const q = tournamentTeamSearch.toLowerCase(); if (!(t.team_name||"").toLowerCase().includes(q) && !(t.org_name||"").toLowerCase().includes(q)) return false }
-              return true
-            })
-            const sorted = [...filtered].sort((a, b) => {
-              const { field, dir } = tournamentTeamSort
-              const av = (a[field] || "").toString().toLowerCase()
-              const bv = (b[field] || "").toString().toLowerCase()
-              return dir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av)
-            })
-            function SortTh({ label, field }) {
-              const active = tournamentTeamSort.field === field
-              return (
-                <th style={{ ...th, cursor: "pointer", userSelect: "none", color: active ? "#5cb800" : "#6b7a99" }}
-                  onClick={() => setTournamentTeamSort(prev => ({ field, dir: prev.field === field && prev.dir === "asc" ? "desc" : "asc" }))}>
-                  {label} {active ? (tournamentTeamSort.dir === "asc" ? "↑" : "↓") : ""}
-                </th>
-              )
-            }
-            return filtered.length === 0 ? (
-              <div style={{ padding: 20, color: "#6b7a99" }}>No teams match filters</div>
-            ) : (
+          </div>
+
+          {teams.filter(t => {
+            if (tournamentTeamDivFilter && (t.division_key || t.bt_master_teams?.ranking_division_key) !== tournamentTeamDivFilter) return false
+            if (tournamentTeamGenderFilter && (t.gender || t.bt_master_teams?.gender || '') !== tournamentTeamGenderFilter) return false
+            return true
+          }).length === 0 ? (
+            <div style={{ padding: 20, color: '#6b7a99' }}>No teams registered yet</div>
+          ) : (
             <table style={table}>
               <thead>
                 <tr>
-                  <SortTh label="Team" field="team_name" />
-                  <SortTh label="Org" field="org_name" />
-                  <SortTh label="Division" field="division_key" />
+                  <th style={th}>Team</th>
+                  <th style={th}>Org</th>
+                  <th style={th}>Division</th>
                   <th style={th}>Registration</th>
-                  <SortTh label="Payment" field="payment_status" />
-                  <SortTh label="Fee" field="custom_entry_fee" />
+                  <th style={th}>Payment</th>
+                  <th style={th}>Custom Fee</th>
                   <th style={th}>Conflicts</th>
                   <th style={th}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((team) => {
+                {teams.map((team) => {
                   const rc = statusColor(
                     team.registration_status === 'approved'
                       ? 'registration_open'
@@ -971,12 +954,7 @@ export default function TournamentDetail({ director }) {
         >
           {!selectedDirectoryTeam ? (
             <>
-              <input
-                placeholder="Search teams or orgs"
-                value={teamSearch}
-                onChange={(e) => setTeamSearch(e.target.value)}
-                style={{ ...input, marginBottom: 8 }}
-              />
+              <input placeholder="Search teams or orgs" value={teamSearch} onChange={(e) => setTeamSearch(e.target.value)} style={{ ...input, marginBottom: 8 }} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
                 <select value={teamDivisionFilter} onChange={e => setTeamDivisionFilter(e.target.value)} style={input}>
                   <option value="">All Divisions</option>
