@@ -24,6 +24,7 @@ import Venues from './pages/Venues'
 import PublicTournament from './pages/PublicTournament'
 import PublicTeam from './pages/PublicTeam'
 import Demo from './pages/Demo'
+import DemoApp from './pages/DemoApp'
 import VenueDetail from './pages/VenueDetail'
 
 export default function App() {
@@ -55,7 +56,7 @@ export default function App() {
         <Route path="/t/:slug/bracket" element={<PublicBracket />} />
         <Route path="/t/:slug" element={<PublicTournament />} />
         <Route path="/team/:teamId" element={<PublicTeam />} />
-        <Route path="/demo" element={<Demo />} />
+        <Route path="/demo" element={<DemoApp />} />
         <Route path="/login" element={<Login />} />
 
         <Route
