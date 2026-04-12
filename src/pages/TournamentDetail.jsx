@@ -60,11 +60,11 @@ export default function TournamentDetail({ director }) {
   const [teamSearch, setTeamSearch] = useState('')
   const [teamDivisionFilter, setTeamDivisionFilter] = useState('')
   const [teamGenderFilter, setTeamGenderFilter] = useState('')
-  const [tournamentTeamSearch, setTournamentTeamSearch] = useState('')
-  const [tournamentTeamDivFilter, setTournamentTeamDivFilter] = useState('')
-  const [tournamentTeamGenderFilter, setTournamentTeamGenderFilter] = useState('')
-  const [tournamentTeamPaymentFilter, setTournamentTeamPaymentFilter] = useState('')
-  const [tournamentTeamSort, setTournamentTeamSort] = useState({ field: 'team_name', dir: 'asc' })
+  const [ttSearch, setTtSearch] = useState('')
+  const [ttDivFilter, setTtDivFilter] = useState('')
+  const [ttGenderFilter, setTtGenderFilter] = useState('')
+  const [ttPayFilter, setTtPayFilter] = useState('')
+  const [ttSort, setTtSort] = useState({ field: 'team_name', dir: 'asc' })
   const [teamDivisionFilter, setTeamDivisionFilter] = useState('')
   const [teamGenderFilter, setTeamGenderFilter] = useState('')
   const [tournamentTeamDivFilter, setTournamentTeamDivFilter] = useState('')
@@ -578,6 +578,21 @@ export default function TournamentDetail({ director }) {
     return [...new Set(directoryTeams.map(t => t.ranking_division_key).filter(Boolean))].sort()
   }, [directoryTeams])
 
+  const filteredSortedTT = useMemo(() => {
+    const f = teams.filter(t => {
+      if (ttDivFilter && t.division_key !== ttDivFilter) return false
+      if (ttGenderFilter && t.gender !== ttGenderFilter) return false
+      if (ttPayFilter && t.payment_status !== ttPayFilter) return false
+      if (ttSearch) { const q = ttSearch.toLowerCase(); if (!(t.team_name||'').toLowerCase().includes(q) && !(t.org_name||'').toLowerCase().includes(q)) return false }
+      return true
+    })
+    return [...f].sort((a, b) => {
+      const av = (a[ttSort.field]||'').toString().toLowerCase()
+      const bv = (b[ttSort.field]||'').toString().toLowerCase()
+      return ttSort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+    })
+  }, [teams, ttSearch, ttDivFilter, ttGenderFilter, ttPayFilter, ttSort])
+
   if (loading) {
     return <div style={{ padding: 40, color: '#4a5568', fontSize: 13 }}>Loading...</div>
   }
@@ -850,8 +865,7 @@ export default function TournamentDetail({ director }) {
                 })}
               </tbody>
             </table>
-            )
-          })()}
+          )}
         </div>
 
         <div style={panel}>
@@ -954,7 +968,7 @@ export default function TournamentDetail({ director }) {
         >
           {!selectedDirectoryTeam ? (
             <>
-              <input placeholder="Search teams or orgs" value={teamSearch} onChange={(e) => setTeamSearch(e.target.value)} style={{ ...input, marginBottom: 8 }} />
+              <input placeholder="Search teams or orgs" value={teamSearch} onChange={e => setTeamSearch(e.target.value)} style={{ ...input, marginBottom: 8 }} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
                 <select value={teamDivisionFilter} onChange={e => setTeamDivisionFilter(e.target.value)} style={input}>
                   <option value="">All Divisions</option>
