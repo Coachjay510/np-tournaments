@@ -33,7 +33,14 @@ export default function Login() {
     <div style={{ minHeight:'100vh', background:'#04060a', display:'flex', alignItems:'center', justifyContent:'center' }}>
       <div style={{ width:360, padding:40, background:'#080c12', border:'1px solid #1a2030', borderRadius:16 }}>
         <div style={{ fontFamily:'Anton, sans-serif', fontSize:22, color:'#5cb800', letterSpacing:1, marginBottom:4 }}>NP TOURNAMENTS</div>
-        <div style={{ fontSize:12, color:'#4a5568', textTransform:'uppercase', letterSpacing:'1.5px', marginBottom:32 }}>Director Portal</div>
+        <div style={{ fontSize:12, color:'#4a5568', textTransform:'uppercase', letterSpacing:'1.5px', marginBottom:24 }}>Director Portal</div>
+
+        <button
+          onClick={() => navigate('/demo')}
+          style={{ width:'100%', background:'transparent', color:'#5cb800', border:'1px solid #1a3a0a', padding:'10px', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer', marginBottom:20, letterSpacing:'0.5px' }}
+        >
+          👀 View Live Demo
+        </button>
 
         <button
           onClick={handleGoogleLogin}
