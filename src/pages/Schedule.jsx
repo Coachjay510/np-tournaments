@@ -831,9 +831,13 @@ export default function Schedule({ director }) {
                       <tbody>
                         {divTeams.map(team => {
                           const constraint = constraints.find(c => String(c.team_id) === String(team.team_id))
+                          const isScheduled = games.some(g => String(g.home_team_id) === String(team.team_id) || String(g.away_team_id) === String(team.team_id))
                           return (
-                            <tr key={team.id}>
-                              <td style={{ ...s.td, fontWeight: 600 }}>{team.team_name}</td>
+                            <tr key={team.id} style={{ opacity: isScheduled ? 0.45 : 1 }}>
+                              <td style={{ ...s.td, fontWeight: 600 }}>
+                                {team.team_name}
+                                {isScheduled && <span style={{ fontSize: 10, color: '#5cb800', marginLeft: 8 }}>✓ Scheduled</span>}
+                              </td>
                               <td style={{ ...s.td, color: '#6b7a99' }}>{team.org_name}</td>
                               <td style={s.td}>
                                 <span style={{ fontSize: 11, color: team.payment_status === 'paid' ? '#5cb800' : '#d4a017', fontWeight: 700 }}>

@@ -50,6 +50,7 @@ export default function TournamentDetail({ director }) {
   const [success, setSuccess] = useState('')
 
   const [showAddTeamModal, setShowAddTeamModal] = useState(false)
+  const [selectedTeamIds, setSelectedTeamIds] = useState([])
   const [showEditTeamModal, setShowEditTeamModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [showCopyModal, setShowCopyModal] = useState(false)
@@ -236,6 +237,7 @@ export default function TournamentDetail({ director }) {
   }
 
   function openAddTeamModal() {
+    setSelectedTeamIds([])
     setSelectedTournamentTeam(null)
     setSelectedDirectoryTeam(null)
     setTeamSearch('')
@@ -618,7 +620,7 @@ export default function TournamentDetail({ director }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 24 }}>
           {[
-            { label: 'Teams', value: `${approved} / ${tournament.max_teams || 0}` },
+            { label: 'Teams', value: `${teams.length} / ${tournament.max_teams || 0}` },
             { label: 'Revenue', value: formatCurrency(teams.reduce((sum, t) => sum + (parseFloat(t.custom_entry_fee) || parseFloat(tournament.registration_fee) || 0), 0)) },
             { label: 'Divisions', value: tournament.divisions?.length || 0 },
             { label: 'Pending', value: pending, color: pending > 0 ? '#d4a017' : '#f0f4ff' },
@@ -665,7 +667,15 @@ export default function TournamentDetail({ director }) {
             </Field>
 
             <Field label="Venue">
-              <select value={form.venue_id} onChange={(e) => updateField('venue_id', e.target.value)} style={input}>
+              <select value={form.venue_id} onChange={(e) => {
+                updateField('venue_id', e.target.value)
+                const v = venues.find(v => v.id === e.target.value)
+                if (v) {
+                  if (v.city) updateField('city', v.city)
+                  if (v.state) updateField('state', v.state)
+                  updateField('venue_name', v.name)
+                }
+              }} style={input}>
                 <option value="">Select venue</option>
                 {venues.map((venue) => (
                   <option key={venue.id} value={venue.id}>
@@ -925,32 +935,83 @@ export default function TournamentDetail({ director }) {
                 Showing {filteredDirectoryTeams.length} teams from directory
               </div>
 
+              <div style={{ fontSize: 11, color: '#4a9eff', marginBottom: 8 }}>
+                Click to select multiple teams, then click "Add Selected Teams"
+              </div>
               <div style={pickerList}>
-                {filteredDirectoryTeams.map((team) => (
-                  <button
-                    key={team.id}
-                    onClick={() => handleSelectTeam(team)}
-                    style={pickerItem}
-                  >
-                    <div style={{ fontWeight: 600 }}>{team.team_name}</div>
-                    <div style={{ fontSize: 12, color: '#6b7a99', marginTop: 4 }}>
-                      {team.org_name || 'No Org'} · {team.age_group || '—'} · {team.gender || '—'}
-                    </div>
-                  </button>
-                ))}
+                {filteredDirectoryTeams.map((team) => {
+                  const alreadyAdded = teams.some(t => String(t.team_id) === String(team.id))
+                  const isSelected = selectedTeamIds.includes(team.id)
+                  return (
+                    <button
+                      key={team.id}
+                      onClick={() => {
+                        if (alreadyAdded) return
+                        setSelectedTeamIds(prev =>
+                          prev.includes(team.id) ? prev.filter(id => id !== team.id) : [...prev, team.id]
+                        )
+                      }}
+                      style={{
+                        ...pickerItem,
+                        opacity: alreadyAdded ? 0.35 : 1,
+                        cursor: alreadyAdded ? 'not-allowed' : 'pointer',
+                        background: isSelected ? '#0d1a0a' : alreadyAdded ? '#08100a' : pickerItem.background,
+                        border: isSelected ? '1px solid #1a3a0a' : pickerItem.border,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ fontWeight: 600, color: alreadyAdded ? '#4a5568' : '#d8e0f0' }}>{team.team_name}</div>
+                        {alreadyAdded && <span style={{ fontSize: 10, color: '#4a5568' }}>Added</span>}
+                        {isSelected && <span style={{ fontSize: 10, color: '#5cb800', fontWeight: 700 }}>✓</span>}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6b7a99', marginTop: 4 }}>
+                        {team.org_name || 'No Org'} · {team.age_group || '—'} · {team.gender || '—'}
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
 
-              <div style={modalActions}>
-                <button
-                  onClick={() => {
-                    setShowAddTeamModal(false)
-                    setSelectedDirectoryTeam(null)
-                    setTeamForm(emptyTeamForm)
-                  }}
-                  style={ghostButton}
-                >
-                  Cancel
-                </button>
+              <div style={{ ...modalActions, justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12, color: '#6b7a99' }}>{selectedTeamIds.length} selected</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => {
+                      setShowAddTeamModal(false)
+                      setSelectedDirectoryTeam(null)
+                      setSelectedTeamIds([])
+                      setTeamForm(emptyTeamForm)
+                    }}
+                    style={ghostButton}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    disabled={selectedTeamIds.length === 0 || savingTeam}
+                    onClick={async () => {
+                      if (!selectedTeamIds.length) return
+                      setSavingTeam(true)
+                      for (const teamId of selectedTeamIds) {
+                        const team = allTeams.find(t => t.id === teamId)
+                        await supabase.from('tournament_teams').insert({
+                          tournament_id: id,
+                          team_id: Number(teamId),
+                          payment_status: 'unpaid',
+                          approval_status: 'approved',
+                          custom_entry_fee: tournament?.registration_fee || null,
+                        })
+                      }
+                      setSavingTeam(false)
+                      setShowAddTeamModal(false)
+                      setSelectedTeamIds([])
+                      setSuccess(`Added ${selectedTeamIds.length} team(s)!`)
+                      loadTournamentDetail()
+                    }}
+                    style={{ ...primaryButton, opacity: selectedTeamIds.length === 0 ? 0.5 : 1 }}
+                  >
+                    {savingTeam ? 'Adding...' : `Add ${selectedTeamIds.length || ''} Team${selectedTeamIds.length !== 1 ? 's' : ''}`}
+                  </button>
+                </div>
               </div>
             </>
           ) : (
