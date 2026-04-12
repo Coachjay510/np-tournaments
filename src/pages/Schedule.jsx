@@ -949,14 +949,19 @@ function generateGames({ teams, constraints, existingGames, startDate, startTime
   }
 
   if (format === 'two_games_guaranteed') {
+    // 3-team pools, everyone plays exactly 2 games, NO bracket
     const poolSize = 3
-    const pools = Array.from({ length: Math.ceil(sortedTeams.length / poolSize) }, () => [])
-    sortedTeams.forEach((t, i) => pools[i % pools.length].push(t))
+    const numPools = Math.ceil(sortedTeams.length / poolSize)
+    const pools = Array.from({ length: numPools }, () => [])
+    // Distribute teams round-robin across pools to ensure no duplicates
+    sortedTeams.forEach((t, i) => pools[i % numPools].push(t))
     pools.forEach((pool, pi) => {
       const poolName = `Pool ${String.fromCharCode(65 + pi)}`
-      for (let i = 0; i < pool.length; i++)
-        for (let j = i + 1; j < pool.length; j++)
-          games.push(makeGame(pool[i], pool[j], 'Pool Play', 1, { pool_name: poolName }))
+      // Only pair unique teams
+      const uniquePool = [...new Map(pool.map(t => [t.team_id, t])).values()]
+      for (let i = 0; i < uniquePool.length; i++)
+        for (let j = i + 1; j < uniquePool.length; j++)
+          games.push(makeGame(uniquePool[i], uniquePool[j], 'Pool Play', 1, { pool_name: poolName }))
     })
   } else if (format === 'round_robin') {
     for (let i = 0; i < sortedTeams.length; i++)
@@ -964,13 +969,15 @@ function generateGames({ teams, constraints, existingGames, startDate, startTime
         games.push(makeGame(sortedTeams[i], sortedTeams[j], 'Round Robin', 1))
   } else if (format === 'pool_play' || format === 'pool_then_bracket') {
     const poolSize = sortedTeams.length <= 6 ? 3 : 4
-    const pools = Array.from({ length: Math.ceil(sortedTeams.length / poolSize) }, () => [])
-    sortedTeams.forEach((t, i) => pools[i % pools.length].push(t))
+    const numPools2 = Math.ceil(sortedTeams.length / poolSize)
+    const pools = Array.from({ length: numPools2 }, () => [])
+    sortedTeams.forEach((t, i) => pools[i % numPools2].push(t))
     pools.forEach((pool, pi) => {
       const poolName = `Pool ${String.fromCharCode(65 + pi)}`
-      for (let i = 0; i < pool.length; i++)
-        for (let j = i + 1; j < pool.length; j++)
-          games.push(makeGame(pool[i], pool[j], 'Pool Play', 1, { pool_name: poolName }))
+      const uniquePool = [...new Map(pool.map(t => [t.team_id, t])).values()]
+      for (let i = 0; i < uniquePool.length; i++)
+        for (let j = i + 1; j < uniquePool.length; j++)
+          games.push(makeGame(uniquePool[i], uniquePool[j], 'Pool Play', 1, { pool_name: poolName }))
     })
     if (format === 'pool_then_bracket') {
       const numPools = pools.length
