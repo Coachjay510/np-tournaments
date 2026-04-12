@@ -20,6 +20,9 @@ import Announcements from './pages/Announcements'
 import Staff from './pages/Staff'
 import Settings from './pages/Settings'
 import Venues from './pages/Venues'
+import PublicTournament from './pages/PublicTournament'
+import PublicTeam from './pages/PublicTeam'
+import Demo from './pages/Demo'
 import VenueDetail from './pages/VenueDetail'
 
 export default function App() {
@@ -49,6 +52,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/t/:slug/bracket" element={<PublicBracket />} />
+        <Route path="/t/:slug" element={<PublicTournament />} />
+        <Route path="/team/:teamId" element={<PublicTeam />} />
+        <Route path="/demo" element={<Demo />} />
         <Route path="/login" element={<Login />} />
 
         <Route
