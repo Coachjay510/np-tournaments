@@ -64,10 +64,6 @@ export default function TournamentDetail({ director }) {
   const [tournamentTeamDivFilter, setTournamentTeamDivFilter] = useState('')
   const [tournamentTeamGenderFilter, setTournamentTeamGenderFilter] = useState('')
   const [tournamentTeamPaymentFilter, setTournamentTeamPaymentFilter] = useState('')
-  const [teamDivisionFilter, setTeamDivisionFilter] = useState('')
-  const [teamGenderFilter, setTeamGenderFilter] = useState('')
-  const [tournamentTeamDivFilter, setTournamentTeamDivFilter] = useState('')
-  const [tournamentTeamGenderFilter, setTournamentTeamGenderFilter] = useState('')
   const [copyName, setCopyName] = useState('')
 
   const [teamForm, setTeamForm] = useState(emptyTeamForm)
