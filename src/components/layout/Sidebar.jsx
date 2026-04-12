@@ -13,15 +13,15 @@ const navItems = [
 ]
 
 const reportItems = [
-  { to: '/analytics', icon: '📊', label: 'Analytics', soon: true },
-  { to: '/financials', icon: '💰', label: 'Financials', soon: true },
+  { to: '/analytics', icon: '📊', label: 'Analytics' },
+  { to: '/financials', icon: '💰', label: 'Financials' },
 ]
 
 const toolItems = [
   { to: '/ref-portal', icon: '🦓', label: 'Ref Portal' },
-  { to: '/announcements', icon: '📢', label: 'Announcements', soon: true },
-  { to: '/staff', icon: '👥', label: 'Staff', soon: true },
-  { to: '/settings', icon: '⚙', label: 'Settings', soon: true },
+  { to: '/announcements', icon: '📢', label: 'Announcements' },
+  { to: '/staff', icon: '👥', label: 'Staff' },
+  { to: '/settings', icon: '⚙', label: 'Settings' },
 ]
 
 const s = {

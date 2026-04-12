@@ -14,6 +14,11 @@ import Organizations from './pages/Organizations'
 import OrganizationDetail from './pages/OrganizationDetail'
 import Schedule from './pages/Schedule'
 import RefPortal from './pages/RefPortal'
+import Analytics from './pages/Analytics'
+import Financials from './pages/Financials'
+import Announcements from './pages/Announcements'
+import Staff from './pages/Staff'
+import Settings from './pages/Settings'
 import Venues from './pages/Venues'
 import VenueDetail from './pages/VenueDetail'
 
@@ -76,6 +81,11 @@ export default function App() {
           />
           <Route path="/schedule" element={<Schedule director={director} />} />
           <Route path="/ref-portal" element={<RefPortal director={director} />} />
+          <Route path="/analytics" element={<Analytics director={director} />} />
+          <Route path="/financials" element={<Financials director={director} />} />
+          <Route path="/announcements" element={<Announcements director={director} />} />
+          <Route path="/staff" element={<Staff director={director} />} />
+          <Route path="/settings" element={<Settings director={director} />} />
         </Route>
       </Routes>
     </BrowserRouter>
