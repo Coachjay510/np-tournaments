@@ -62,10 +62,6 @@ export default function TournamentDetail({ director }) {
   const [teamGenderFilter, setTeamGenderFilter] = useState('')
   const [tournamentTeamDivFilter, setTournamentTeamDivFilter] = useState('')
   const [tournamentTeamGenderFilter, setTournamentTeamGenderFilter] = useState('')
-  const [tournamentTeamPaymentFilter, setTournamentTeamPaymentFilter] = useState('')
-  const [tournamentTeamSearch, setTournamentTeamSearch] = useState('')
-  const [tournamentTeamPaymentFilter, setTournamentTeamPaymentFilter] = useState('')
-  const [tournamentTeamSearch, setTournamentTeamSearch] = useState('')
   const [copyName, setCopyName] = useState('')
 
   const [teamForm, setTeamForm] = useState(emptyTeamForm)
@@ -757,31 +753,862 @@ export default function TournamentDetail({ director }) {
             </button>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, padding: "10px 0" }}>
-            <input placeholder="Search team or org..." value={tournamentTeamSearch || ""} onChange={e => setTournamentTeamSearch(e.target.value)} style={input} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: '10px 0' }}>
             <select value={tournamentTeamDivFilter} onChange={e => setTournamentTeamDivFilter(e.target.value)} style={input}>
               <option value="">All Divisions</option>
-              {[...new Set(teams.map(t => t.division_key).filter(Boolean))].sort().map(d => <option key={d} value={d}>{d}</option>)}
+              {[...new Set(teams.map(t => t.division_key || t.bt_master_teams?.ranking_division_key).filter(Boolean))].sort().map(d => <option key={d} value={d}>{d}</option>)}
             </select>
             <select value={tournamentTeamGenderFilter} onChange={e => setTournamentTeamGenderFilter(e.target.value)} style={input}>
               <option value="">All Genders</option>
               <option value="Boys">Boys</option>
               <option value="Girls">Girls</option>
             </select>
-            <select value={tournamentTeamPaymentFilter || ""} onChange={e => setTournamentTeamPaymentFilter(e.target.value)} style={input}>
-              <option value="">All Payments</option>
-              <option value="paid">Paid</option>
+          </div>
+
+          {teams.filter(t => {
+            if (tournamentTeamDivFilter && (t.division_key || t.bt_master_teams?.ranking_division_key) !== tournamentTeamDivFilter) return false
+            if (tournamentTeamGenderFilter && (t.gender || t.bt_master_teams?.gender || '') !== tournamentTeamGenderFilter) return false
+            return true
+          }).length === 0 ? (
+            <div style={{ padding: 20, color: '#6b7a99' }}>No teams registered yet</div>
+          ) : (
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>Team</th>
+                  <th style={th}>Org</th>
+                  <th style={th}>Division</th>
+                  <th style={th}>Registration</th>
+                  <th style={th}>Payment</th>
+                  <th style={th}>Custom Fee</th>
+                  <th style={th}>Conflicts</th>
+                  <th style={th}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teams.map((team) => {
+                  const rc = statusColor(
+                    team.registration_status === 'approved'
+                      ? 'registration_open'
+                      : team.registration_status === 'rejected'
+                        ? 'cancelled'
+                        : 'draft'
+                  )
+
+                  const conflict = getConstraintForTeam(team.team_id || team.id)
+
+                  return (
+                    <tr key={team.id}>
+                      <td style={td}>{team.bt_master_teams?.display_name || team.team_name || "—"}</td>
+                      <td style={td}>{team.bt_master_teams?.bt_organizations?.org_name || "—"}</td>
+                      <td style={td}>{team.bt_master_teams?.ranking_division_key || "—"}</td>
+                      <td style={td}>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            padding: '3px 8px',
+                            borderRadius: 20,
+                            fontWeight: 600,
+                            background: rc.bg,
+                            color: rc.color,
+                            border: `1px solid ${rc.border}`,
+                          }}
+                        >
+                          {team.registration_status}
+                        </span>
+                      </td>
+                      <td style={td}>{team.payment_status || 'unpaid'}</td>
+                      <td style={td}>
+                        {team.custom_entry_fee != null
+                          ? formatCurrency(team.custom_entry_fee)
+                          : '—'}
+                      </td>
+                      <td style={td}>
+                        {conflict?.has_conflicts ? 'Has conflicts' : 'No conflicts'}
+                      </td>
+                      <td style={td}>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button onClick={() => openEditTeamModal(team)} style={ghostButtonSmall}>
+                            Edit
+                          </button>
+                          <button onClick={() => handleRemoveTeam(team.id)} style={dangerButtonSmall}>
+                            Remove
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div style={panel}>
+          <div style={panelHeader}>SCHEDULING SETTINGS</div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 12, marginBottom: 16 }}>
+            <input
+              placeholder="Day Label"
+              value={scheduleForm.day_label}
+              onChange={(e) => setScheduleForm((p) => ({ ...p, day_label: e.target.value }))}
+              style={input}
+            />
+            <input
+              type="date"
+              value={scheduleForm.event_date}
+              onChange={(e) => setScheduleForm((p) => ({ ...p, event_date: e.target.value }))}
+              style={input}
+            />
+            <input
+              type="time"
+              value={scheduleForm.gym_open_time}
+              onChange={(e) => setScheduleForm((p) => ({ ...p, gym_open_time: e.target.value }))}
+              style={input}
+            />
+            <input
+              type="time"
+              value={scheduleForm.gym_close_time}
+              onChange={(e) => setScheduleForm((p) => ({ ...p, gym_close_time: e.target.value }))}
+              style={input}
+            />
+            <input
+              type="number"
+              placeholder="Slot Minutes"
+              value={scheduleForm.slot_minutes}
+              onChange={(e) => setScheduleForm((p) => ({ ...p, slot_minutes: e.target.value }))}
+              style={input}
+            />
+            <input
+              type="number"
+              placeholder="Buffer"
+              value={scheduleForm.buffer_minutes}
+              onChange={(e) => setScheduleForm((p) => ({ ...p, buffer_minutes: e.target.value }))}
+              style={input}
+            />
+          </div>
+
+          <button onClick={handleAddScheduleSetting} disabled={savingSchedule} style={primaryButton}>
+            {savingSchedule ? 'Saving...' : 'Add Schedule Rule'}
+          </button>
+
+          <div style={{ marginTop: 16 }}>
+            {scheduleSettings.length === 0 ? (
+              <div style={{ color: '#6b7a99' }}>No schedule settings added yet.</div>
+            ) : (
+              <table style={table}>
+                <thead>
+                  <tr>
+                    <th style={th}>Day</th>
+                    <th style={th}>Date</th>
+                    <th style={th}>Open</th>
+                    <th style={th}>Close</th>
+                    <th style={th}>Slot</th>
+                    <th style={th}>Buffer</th>
+                    <th style={th}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scheduleSettings.map((setting) => (
+                    <tr key={setting.id}>
+                      <td style={td}>{setting.day_label}</td>
+                      <td style={td}>{setting.event_date || '—'}</td>
+                      <td style={td}>{setting.gym_open_time || '—'}</td>
+                      <td style={td}>{setting.gym_close_time || '—'}</td>
+                      <td style={td}>{setting.slot_minutes} min</td>
+                      <td style={td}>{setting.buffer_minutes} min</td>
+                      <td style={td}>
+                        <button onClick={() => handleDeleteScheduleSetting(setting.id)} style={dangerButtonSmall}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {showAddTeamModal && (
+        <Modal
+          title={selectedDirectoryTeam ? 'Add Team To Tournament' : 'Select Team'}
+          onClose={() => {
+            setShowAddTeamModal(false)
+            setSelectedDirectoryTeam(null)
+            setTeamForm(emptyTeamForm)
+            setTeamDivisionFilter('')
+            setTeamGenderFilter('')
+          }}
+        >
+          {!selectedDirectoryTeam ? (
+            <>
+              <input
+                placeholder="Search teams or orgs"
+                value={teamSearch}
+                onChange={(e) => setTeamSearch(e.target.value)}
+                style={{ ...input, marginBottom: 12 }}
+              />
+
+              <div style={{ color: '#6b7a99', fontSize: 12, marginBottom: 10 }}>
+                Showing {filteredDirectoryTeams.length} teams from directory
+              </div>
+
+              <div style={{ fontSize: 11, color: '#4a9eff', marginBottom: 8 }}>
+                Click to select multiple teams, then click "Add Selected Teams"
+              </div>
+              <div style={pickerList}>
+                {filteredDirectoryTeams.map((team) => {
+                  const alreadyAdded = teams.some(t => String(t.team_id) === String(team.id))
+                  const isSelected = selectedTeamIds.includes(team.id)
+                  return (
+                    <button
+                      key={team.id}
+                      onClick={() => {
+                        if (alreadyAdded) return
+                        setSelectedTeamIds(prev =>
+                          prev.includes(team.id) ? prev.filter(id => id !== team.id) : [...prev, team.id]
+                        )
+                      }}
+                      style={{
+                        ...pickerItem,
+                        opacity: alreadyAdded ? 0.35 : 1,
+                        cursor: alreadyAdded ? 'not-allowed' : 'pointer',
+                        background: isSelected ? '#0d1a0a' : alreadyAdded ? '#08100a' : pickerItem.background,
+                        border: isSelected ? '1px solid #1a3a0a' : pickerItem.border,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ fontWeight: 600, color: alreadyAdded ? '#4a5568' : '#d8e0f0' }}>{team.team_name}</div>
+                        {alreadyAdded && <span style={{ fontSize: 10, color: '#4a5568' }}>Added</span>}
+                        {isSelected && <span style={{ fontSize: 10, color: '#5cb800', fontWeight: 700 }}>✓</span>}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6b7a99', marginTop: 4 }}>
+                        {team.org_name || 'No Org'} · {team.age_group || '—'} · {team.gender || '—'}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div style={{ ...modalActions, justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12, color: '#6b7a99' }}>{selectedTeamIds.length} selected</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => {
+                      setShowAddTeamModal(false)
+                      setSelectedDirectoryTeam(null)
+                      setSelectedTeamIds([])
+                      setTeamForm(emptyTeamForm)
+                    }}
+                    style={ghostButton}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    disabled={selectedTeamIds.length === 0 || savingTeam}
+                    onClick={async () => {
+                      if (!selectedTeamIds.length) return
+                      setSavingTeam(true)
+                      for (const teamId of selectedTeamIds) {
+                        const team = allTeams.find(t => t.id === teamId)
+                        await supabase.from('tournament_teams').insert({
+                          tournament_id: id,
+                          team_id: Number(teamId),
+                          payment_status: 'unpaid',
+                          approval_status: 'approved',
+                          custom_entry_fee: tournament?.registration_fee || null,
+                        })
+                      }
+                      setSavingTeam(false)
+                      setShowAddTeamModal(false)
+                      setSelectedTeamIds([])
+                      setSuccess(`Added ${selectedTeamIds.length} team(s)!`)
+                      loadTournamentDetail()
+                    }}
+                    style={{ ...primaryButton, opacity: selectedTeamIds.length === 0 ? 0.5 : 1 }}
+                  >
+                    {savingTeam ? 'Adding...' : `Add ${selectedTeamIds.length || ''} Team${selectedTeamIds.length !== 1 ? 's' : ''}`}
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div
+                style={{
+                  background: '#04060a',
+                  border: '1px solid #1a2030',
+                  borderRadius: 10,
+                  padding: 14,
+                  marginBottom: 16,
+                }}
+              >
+                <div style={{ fontWeight: 700 }}>{selectedDirectoryTeam.team_name}</div>
+                <div style={{ fontSize: 12, color: '#6b7a99', marginTop: 4 }}>
+                  {selectedDirectoryTeam.org_name || 'No Org'} · {selectedDirectoryTeam.age_group || '—'} · {selectedDirectoryTeam.gender || '—'}
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+                <input
+                  placeholder="Custom Fee"
+                  value={teamForm.custom_entry_fee}
+                  onChange={(e) => setTeamForm((p) => ({ ...p, custom_entry_fee: e.target.value }))}
+                  style={input}
+                />
+                <select
+                  value={teamForm.payment_status}
+                  onChange={(e) => setTeamForm((p) => ({ ...p, payment_status: e.target.value }))}
+                  style={input}
+                >
+                  <option value="unpaid">Unpaid</option>
+                  <option value="paid">Paid</option>
+                  <option value="partial">Partial</option>
+                </select>
+                <select
+                  value={teamForm.registration_status}
+                  onChange={(e) => setTeamForm((p) => ({ ...p, registration_status: e.target.value }))}
+                  style={input}
+                >
+                  <option value="approved">Approved</option>
+                  <option value="pending">Pending</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+
+              <textarea
+                placeholder="Notes"
+                value={teamForm.notes}
+                onChange={(e) => setTeamForm((p) => ({ ...p, notes: e.target.value }))}
+                style={textarea}
+              />
+
+              <div style={{ marginTop: 16 }}>
+                <label style={checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={teamForm.no_conflicts}
+                    onChange={(e) =>
+                      setTeamForm((p) => ({
+                        ...p,
+                        no_conflicts: e.target.checked,
+                      }))
+                    }
+                  />
+                  No conflicts
+                </label>
+              </div>
+
+              {!teamForm.no_conflicts && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 16 }}>
+                  <input
+                    placeholder="Shared Coach Group"
+                    value={teamForm.shared_coach_group}
+                    onChange={(e) => setTeamForm((p) => ({ ...p, shared_coach_group: e.target.value }))}
+                    style={input}
+                  />
+
+                  <select
+                    value={teamForm.preferred_day}
+                    onChange={(e) => setTeamForm((p) => ({ ...p, preferred_day: e.target.value }))}
+                    style={input}
+                  >
+                    <option value="">Preferred Day</option>
+                    <option value="Saturday">Saturday</option>
+                    <option value="Sunday">Sunday</option>
+                  </select>
+
+                  <input
+                    placeholder="Unavailable Days (comma separated)"
+                    value={teamForm.unavailable_days.join(', ')}
+                    onChange={(e) =>
+                      setTeamForm((p) => ({
+                        ...p,
+                        unavailable_days: e.target.value
+                          .split(',')
+                          .map((v) => v.trim())
+                          .filter(Boolean),
+                      }))
+                    }
+                    style={input}
+                  />
+
+                  <input
+                    type="time"
+                    value={teamForm.earliest_start_time}
+                    onChange={(e) => setTeamForm((p) => ({ ...p, earliest_start_time: e.target.value }))}
+                    style={input}
+                  />
+
+                  <input
+                    type="time"
+                    value={teamForm.latest_start_time}
+                    onChange={(e) => setTeamForm((p) => ({ ...p, latest_start_time: e.target.value }))}
+                    style={input}
+                  />
+
+                  <input
+                    type="number"
+                    placeholder="Min Rest Minutes"
+                    value={teamForm.min_rest_minutes}
+                    onChange={(e) => setTeamForm((p) => ({ ...p, min_rest_minutes: e.target.value }))}
+                    style={input}
+                  />
+                </div>
+              )}
+
+              <div style={modalActions}>
+                <button
+                  onClick={() => {
+                    setSelectedDirectoryTeam(null)
+                    setTeamForm({
+                      ...emptyTeamForm,
+                      custom_entry_fee:
+                        tournament?.registration_fee != null
+                          ? String(tournament.registration_fee)
+                          : '',
+                    })
+                  }}
+                  style={secondaryButton}
+                >
+                  Back
+                </button>
+
+                <button onClick={handleAddTeam} disabled={savingTeam} style={primaryButton}>
+                  {savingTeam ? 'Adding...' : 'Save Team'}
+                </button>
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
+
+      {showEditTeamModal && (
+        <Modal title="Edit Tournament Team" onClose={() => setShowEditTeamModal(false)}>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
+            {selectedTournamentTeam?.team_name}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+            <input
+              placeholder="Custom Fee"
+              value={teamForm.custom_entry_fee}
+              onChange={(e) => setTeamForm((p) => ({ ...p, custom_entry_fee: e.target.value }))}
+              style={input}
+            />
+            <select
+              value={teamForm.payment_status}
+              onChange={(e) => setTeamForm((p) => ({ ...p, payment_status: e.target.value }))}
+              style={input}
+            >
               <option value="unpaid">Unpaid</option>
+              <option value="paid">Paid</option>
+              <option value="partial">Partial</option>
+            </select>
+            <select
+              value={teamForm.registration_status}
+              onChange={(e) => setTeamForm((p) => ({ ...p, registration_status: e.target.value }))}
+              style={input}
+            >
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="rejected">Rejected</option>
             </select>
           </div>
-          {(() => {
-            const filteredTT = teams.filter(t => {
-              if (tournamentTeamDivFilter && t.division_key !== tournamentTeamDivFilter) return false
-              if (tournamentTeamGenderFilter && t.gender !== tournamentTeamGenderFilter) return false
-              if (tournamentTeamPaymentFilter && t.payment_status !== tournamentTeamPaymentFilter) return false
-              if (tournamentTeamSearch) { const q = tournamentTeamSearch.toLowerCase(); if (!(t.team_name||"").toLowerCase().includes(q) && !(t.org_name||"").toLowerCase().includes(q)) return false }
-              return true
-            })
-            return filteredTT.length === 0 ? (
-              <div style={{ padding: 20, color: "#6b7a99" }}>No teams match filters</div>
-            ) : (
+
+          <textarea
+            placeholder="Notes"
+            value={teamForm.notes}
+            onChange={(e) => setTeamForm((p) => ({ ...p, notes: e.target.value }))}
+            style={textarea}
+          />
+
+          <div style={{ marginTop: 16 }}>
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={teamForm.no_conflicts}
+                onChange={(e) =>
+                  setTeamForm((p) => ({
+                    ...p,
+                    no_conflicts: e.target.checked,
+                  }))
+                }
+              />
+              No conflicts
+            </label>
+          </div>
+
+          {!teamForm.no_conflicts && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 16 }}>
+              <input
+                placeholder="Shared Coach Group"
+                value={teamForm.shared_coach_group}
+                onChange={(e) => setTeamForm((p) => ({ ...p, shared_coach_group: e.target.value }))}
+                style={input}
+              />
+
+              <select
+                value={teamForm.preferred_day}
+                onChange={(e) => setTeamForm((p) => ({ ...p, preferred_day: e.target.value }))}
+                style={input}
+              >
+                <option value="">Preferred Day</option>
+                <option value="Saturday">Saturday</option>
+                <option value="Sunday">Sunday</option>
+              </select>
+
+              <input
+                placeholder="Unavailable Days (comma separated)"
+                value={teamForm.unavailable_days.join(', ')}
+                onChange={(e) =>
+                  setTeamForm((p) => ({
+                    ...p,
+                    unavailable_days: e.target.value
+                      .split(',')
+                      .map((v) => v.trim())
+                      .filter(Boolean),
+                  }))
+                }
+                style={input}
+              />
+
+              <input
+                type="time"
+                value={teamForm.earliest_start_time}
+                onChange={(e) => setTeamForm((p) => ({ ...p, earliest_start_time: e.target.value }))}
+                style={input}
+              />
+
+              <input
+                type="time"
+                value={teamForm.latest_start_time}
+                onChange={(e) => setTeamForm((p) => ({ ...p, latest_start_time: e.target.value }))}
+                style={input}
+              />
+
+              <input
+                type="number"
+                placeholder="Min Rest Minutes"
+                value={teamForm.min_rest_minutes}
+                onChange={(e) => setTeamForm((p) => ({ ...p, min_rest_minutes: e.target.value }))}
+                style={input}
+              />
+            </div>
+          )}
+
+          <div style={modalActions}>
+            <button onClick={() => setShowEditTeamModal(false)} style={ghostButton}>
+              Cancel
+            </button>
+            <button onClick={handleUpdateTeamAssignment} disabled={savingTeam} style={primaryButton}>
+              {savingTeam ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showDeleteModal && (
+        <Modal title="Delete Tournament" onClose={() => setShowDeleteModal(false)}>
+          <div style={{ color: '#ffb4b4', marginBottom: 16 }}>
+            This will permanently delete this tournament.
+          </div>
+          <div style={modalActions}>
+            <button onClick={() => setShowDeleteModal(false)} style={ghostButton}>
+              Cancel
+            </button>
+            <button onClick={handleDeleteTournament} disabled={deleting} style={dangerButton}>
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showCopyModal && (
+        <Modal title="Copy Tournament" onClose={() => setShowCopyModal(false)}>
+          <input
+            placeholder="New tournament name"
+            value={copyName}
+            onChange={(e) => setCopyName(e.target.value)}
+            style={input}
+          />
+          <div style={modalActions}>
+            <button onClick={() => setShowCopyModal(false)} style={ghostButton}>
+              Cancel
+            </button>
+            <button onClick={handleCopyTournament} disabled={copying} style={primaryButton}>
+              {copying ? 'Copying...' : 'Copy Tournament'}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      {children}
+    </div>
+  )
+}
+
+function Checkbox({ checked, onChange, label }) {
+  return (
+    <label style={checkboxLabel}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      {label}
+    </label>
+  )
+}
+
+function Modal({ title, children, onClose }) {
+  return (
+    <div style={modalOverlay}>
+      <div style={modalCard}>
+        <div style={modalHeader}>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{title}</div>
+          <button onClick={onClose} style={closeButton}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+const ghostButton = {
+  background: 'transparent',
+  color: '#6b7a99',
+  border: '1px solid #1a2030',
+  padding: '8px 14px',
+  borderRadius: 8,
+  fontSize: 13,
+  cursor: 'pointer',
+}
+
+const secondaryButton = {
+  background: '#111827',
+  color: '#fff',
+  border: '1px solid #1f2937',
+  padding: '8px 14px',
+  borderRadius: 8,
+  fontSize: 13,
+  cursor: 'pointer',
+}
+
+const ghostButtonSmall = {
+  background: 'transparent',
+  color: '#d8e0f0',
+  border: '1px solid #1a2030',
+  padding: '6px 10px',
+  borderRadius: 8,
+  fontSize: 12,
+  cursor: 'pointer',
+}
+
+const statCard = {
+  background: '#080c12',
+  border: '1px solid #1a2030',
+  borderRadius: 12,
+  padding: 16,
+}
+
+const statLabel = {
+  fontSize: 11,
+  textTransform: 'uppercase',
+  letterSpacing: '1.2px',
+  color: '#4a5568',
+  marginBottom: 8,
+}
+
+const statValue = {
+  fontFamily: 'Anton, sans-serif',
+  fontSize: 28,
+}
+
+const panel = {
+  background: '#080c12',
+  border: '1px solid #1a2030',
+  borderRadius: 12,
+  overflow: 'hidden',
+  padding: 18,
+  marginBottom: 20,
+}
+
+const panelHeader = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: '#c0cce0',
+  marginBottom: 16,
+}
+
+const formGrid = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2,1fr)',
+  gap: 12,
+}
+
+const labelStyle = {
+  display: 'block',
+  marginBottom: 6,
+  fontSize: 12,
+  color: '#6b7a99',
+}
+
+const input = {
+  width: '100%',
+  background: '#04060a',
+  color: '#fff',
+  border: '1px solid #1a2030',
+  borderRadius: 8,
+  padding: '12px 14px',
+}
+
+const textarea = {
+  width: '100%',
+  minHeight: 90,
+  background: '#04060a',
+  color: '#fff',
+  border: '1px solid #1a2030',
+  borderRadius: 8,
+  padding: '12px 14px',
+  marginTop: 12,
+}
+
+const checkboxLabel = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  fontSize: 13,
+  color: '#d8e0f0',
+}
+
+const primaryButton = {
+  background: '#5cb800',
+  color: '#04060a',
+  border: 'none',
+  borderRadius: 8,
+  padding: '12px 16px',
+  fontWeight: 700,
+  cursor: 'pointer',
+}
+
+const dangerButton = {
+  background: '#2a1111',
+  color: '#ff8f8f',
+  border: '1px solid #5a2323',
+  borderRadius: 8,
+  padding: '8px 12px',
+  cursor: 'pointer',
+}
+
+const dangerButtonSmall = {
+  background: '#2a1111',
+  color: '#ff8f8f',
+  border: '1px solid #5a2323',
+  borderRadius: 8,
+  padding: '6px 10px',
+  cursor: 'pointer',
+  fontSize: 12,
+}
+
+const table = {
+  width: '100%',
+  borderCollapse: 'collapse',
+}
+
+const th = {
+  textAlign: 'left',
+  padding: '12px 14px',
+  fontSize: 11,
+  color: '#6b7a99',
+  textTransform: 'uppercase',
+  borderBottom: '1px solid #1a2030',
+}
+
+const td = {
+  padding: '12px 14px',
+  color: '#d8e0f0',
+  fontSize: 13,
+  borderBottom: '1px solid #0e1320',
+}
+
+const errorBanner = {
+  background: '#2a1111',
+  color: '#ff8f8f',
+  border: '1px solid #5a2323',
+  padding: 12,
+  borderRadius: 10,
+  marginBottom: 16,
+}
+
+const successBanner = {
+  background: '#102311',
+  color: '#7fe28a',
+  border: '1px solid #1e4f22',
+  padding: 12,
+  borderRadius: 10,
+  marginBottom: 16,
+}
+
+const modalOverlay = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(0,0,0,0.7)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 1000,
+}
+
+const modalCard = {
+  width: 860,
+  maxWidth: '95%',
+  background: '#080c12',
+  border: '1px solid #1a2030',
+  borderRadius: 14,
+  padding: 24,
+}
+
+const modalHeader = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 16,
+}
+
+const closeButton = {
+  background: 'transparent',
+  color: '#fff',
+  border: 'none',
+  fontSize: 24,
+  cursor: 'pointer',
+}
+
+const modalActions = {
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: 10,
+  marginTop: 16,
+}
+
+const pickerList = {
+  maxHeight: 360,
+  overflowY: 'auto',
+  display: 'grid',
+  gap: 8,
+}
+
+const pickerItem = {
+  background: '#04060a',
+  border: '1px solid #1a2030',
+  borderRadius: 10,
+  padding: 12,
+  textAlign: 'left',
+  color: '#fff',
+  cursor: 'pointer',
+}
