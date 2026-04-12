@@ -393,6 +393,12 @@ function AutoSchedulerPanel({ teams, constraints, courts, games, refs, divisionK
   const [gameDuration, setGameDuration] = useState(60)
   const [bufferMins, setBufferMins] = useState(10)
   const [selectedCourts, setSelectedCourts] = useState([])
+  // Auto-select all courts when they first load
+  useEffect(() => {
+    if (courts.length > 0 && selectedCourts.length === 0) {
+      setSelectedCourts(courts.map(c => c.id))
+    }
+  }, [courts])
   const [autoAssignRefs, setAutoAssignRefs] = useState(true)
   const [refsPerGame, setRefsPerGame] = useState(2)
   const [running, setRunning] = useState(false)
@@ -949,15 +955,21 @@ function generateGames({ teams, constraints, existingGames, startDate, startTime
   }
 
   if (format === 'two_games_guaranteed') {
-    // 3-team pools, everyone plays exactly 2 games, NO bracket
-    const poolSize = 3
-    const numPools = Math.ceil(sortedTeams.length / poolSize)
-    const pools = Array.from({ length: numPools }, () => [])
-    // Distribute teams round-robin across pools to ensure no duplicates
-    sortedTeams.forEach((t, i) => pools[i % numPools].push(t))
+    // Build pools of 3, remainder goes into last pool (making it 4)
+    // This guarantees every team plays at least 2 games
+    const pools = []
+    let remaining = [...sortedTeams]
+    while (remaining.length >= 3) {
+      pools.push(remaining.splice(0, 3))
+    }
+    // Add leftover teams to last pool instead of making a tiny pool
+    if (remaining.length > 0 && pools.length > 0) {
+      pools[pools.length - 1].push(...remaining)
+    } else if (remaining.length > 0) {
+      pools.push(remaining)
+    }
     pools.forEach((pool, pi) => {
       const poolName = `Pool ${String.fromCharCode(65 + pi)}`
-      // Only pair unique teams
       const uniquePool = [...new Map(pool.map(t => [t.team_id, t])).values()]
       for (let i = 0; i < uniquePool.length; i++)
         for (let j = i + 1; j < uniquePool.length; j++)
