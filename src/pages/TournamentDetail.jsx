@@ -869,7 +869,6 @@ export default function TournamentDetail({ director }) {
             </table>
             )
           })()}
-          )}
         </div>
 
         <div style={panel}>
