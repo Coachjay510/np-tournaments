@@ -65,8 +65,6 @@ export default function TournamentDetail({ director }) {
   const [ttGenderFilter, setTtGenderFilter] = useState('')
   const [ttPayFilter, setTtPayFilter] = useState('')
   const [ttSort, setTtSort] = useState({ field: 'team_name', dir: 'asc' })
-  const [teamDivisionFilter, setTeamDivisionFilter] = useState('')
-  const [teamGenderFilter, setTeamGenderFilter] = useState('')
   const [tournamentTeamDivFilter, setTournamentTeamDivFilter] = useState('')
   const [tournamentTeamGenderFilter, setTournamentTeamGenderFilter] = useState('')
   const [copyName, setCopyName] = useState('')
@@ -574,9 +572,7 @@ export default function TournamentDetail({ director }) {
     })
   }, [directoryTeams, teamSearch, teamDivisionFilter, teamGenderFilter])
 
-  const divisionOptions = useMemo(() => {
-    return [...new Set(directoryTeams.map(t => t.ranking_division_key).filter(Boolean))].sort()
-  }, [directoryTeams])
+  
 
   const filteredSortedTT = useMemo(() => {
     const f = teams.filter(t => {
