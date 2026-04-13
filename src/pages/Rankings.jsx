@@ -185,19 +185,6 @@ export default function Rankings() {
     preparedRows.map((r) => r.ranking_division_key).filter(Boolean)
   ).size
 
-  const debugText = `Source: ${source} | Rankings: ${rankings?.length || 0} | Prepared: ${preparedRows?.length || 0} | Divisions selected: ${divisions.length}`
-
-  console.log('Rankings debug:', {
-    source,
-    rankingsLength: rankings?.length || 0,
-    preparedLength: preparedRows?.length || 0,
-    selectedDivisions: divisions,
-    gender,
-    search,
-    topMode,
-    divisionOptions,
-  })
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <Topbar
@@ -220,10 +207,6 @@ export default function Rankings() {
           </button>
         }
       />
-
-      <div style={{ color: '#fff', padding: '12px 24px', fontSize: 12 }}>
-        {debugText}
-      </div>
 
       <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
         <div

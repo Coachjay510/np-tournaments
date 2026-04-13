@@ -19,6 +19,7 @@ import Financials from './pages/Financials'
 import Announcements from './pages/Announcements'
 import Staff from './pages/Staff'
 import Settings from './pages/Settings'
+import SuperAdmin from './pages/SuperAdmin'
 import Inventory from './pages/Inventory'
 import Venues from './pages/Venues'
 import PublicTournament from './pages/PublicTournament'
@@ -94,6 +95,7 @@ export default function App() {
           <Route path="/announcements" element={<Announcements director={director} />} />
           <Route path="/staff" element={<Staff director={director} />} />
           <Route path="/settings" element={<Settings director={director} />} />
+          <Route path="/super-admin" element={<SuperAdmin director={director} />} />
           <Route path="/inventory" element={<Inventory director={director} />} />
         </Route>
       </Routes>

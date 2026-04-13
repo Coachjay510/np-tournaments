@@ -157,6 +157,12 @@ export default function Sidebar({ director }) {
       </nav>
 
       <div style={s.footer}>
+        {director?.is_super_admin && (
+          <NavLink to="/super-admin" style={({ isActive }) => ({ ...s.navItem, background: isActive ? '#1f0707' : 'transparent', color: isActive ? '#e05555' : '#6b7a99', marginBottom: 8 })}>
+            <span style={{ fontSize: 15, width: 18, textAlign: 'center' }}>🔐</span>
+            Super Admin
+          </NavLink>
+        )}
         <div style={{ fontSize: 12, fontWeight: 600, color: '#8898b8' }}>
           {director?.display_name || 'Director'}
         </div>
