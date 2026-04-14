@@ -9,10 +9,12 @@ export function useDirector() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('=== getSession result:', session?.user?.id, session?.user?.email)
       if (session) fetchDirector(session.user.id, session.user.email)
       else setLoading(false)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('=== authStateChange:', _event, session?.user?.id)
       if (session) fetchDirector(session.user.id, session.user.email)
       else { setDirector(null); setLoading(false) }
     })
@@ -20,12 +22,14 @@ export function useDirector() {
   }, [])
 
   async function fetchDirector(userId, email) {
+    console.log('=== fetchDirector called:', userId, email)
     try {
       const { data, error } = await supabase
         .from('directors')
         .select('*')
         .eq('user_id', userId)
         .single()
+      console.log('=== directors query result:', data, 'error:', error?.message)
 
       if (data) {
         setDirector({ ...data, is_super_admin: email === SUPER_ADMIN_EMAIL })
