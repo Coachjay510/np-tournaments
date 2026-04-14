@@ -20,25 +20,52 @@ export function useDirector() {
   }, [])
 
   async function fetchDirector(userId, email) {
-    const { data, error } = await supabase
-      .from('directors')
-      .select('*')
-      .eq('user_id', userId)
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('directors')
+        .select('*')
+        .eq('user_id', userId)
+        .single()
 
-    if (data) {
-      // Attach super admin flag
-      setDirector({ ...data, is_super_admin: email === SUPER_ADMIN_EMAIL })
-    } else {
-      // Auto-create director record if missing
-      const { data: newDirector } = await supabase
+      if (data) {
+        setDirector({ ...data, is_super_admin: email === SUPER_ADMIN_EMAIL })
+        setLoading(false)
+        return
+      }
+
+      // No record found - try to create one
+      const { data: newDirector, error: insertError } = await supabase
         .from('directors')
         .insert({ user_id: userId, email, display_name: email.split('@')[0] })
         .select()
         .single()
-      if (newDirector) setDirector({ ...newDirector, is_super_admin: email === SUPER_ADMIN_EMAIL })
+
+      if (newDirector) {
+        setDirector({ ...newDirector, is_super_admin: email === SUPER_ADMIN_EMAIL })
+      } else {
+        // Insert failed (RLS?) - create a minimal director object so user can log in
+        console.warn('Could not create director record:', insertError?.message)
+        setDirector({
+          id: userId,
+          user_id: userId,
+          email,
+          display_name: email.split('@')[0],
+          is_super_admin: email === SUPER_ADMIN_EMAIL,
+        })
+      }
+    } catch (err) {
+      console.error('fetchDirector error:', err)
+      // Fallback — let user in with minimal profile
+      setDirector({
+        id: userId,
+        user_id: userId,
+        email,
+        display_name: email.split('@')[0],
+        is_super_admin: email === SUPER_ADMIN_EMAIL,
+      })
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return { director, loading }
