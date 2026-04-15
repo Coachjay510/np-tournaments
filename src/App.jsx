@@ -26,6 +26,8 @@ import PublicTournament from './pages/PublicTournament'
 import PublicTeam from './pages/PublicTeam'
 import Demo from './pages/Demo'
 import DemoApp from './pages/DemoApp'
+import TournamentLanding from './pages/TournamentLanding'
+import OnboardingWizard from './pages/OnboardingWizard'
 import VenueDetail from './pages/VenueDetail'
 
 export default function App() {
@@ -58,11 +60,13 @@ export default function App() {
         <Route path="/t/:slug" element={<PublicTournament />} />
         <Route path="/team/:teamId" element={<PublicTeam />} />
         <Route path="/demo" element={<DemoApp />} />
+        <Route path="/landing" element={<TournamentLanding />} />
+        
         <Route path="/login" element={<Login />} />
 
         <Route
           element={
-            director ? <AppShell director={director} /> : <Navigate to="/login" />
+            director ? (director.onboarded === false ? <OnboardingWizard director={director} /> : <AppShell director={director} />) : <Navigate to="/login" />
           }
         >
           <Route path="/" element={<Dashboard director={director} />} />
