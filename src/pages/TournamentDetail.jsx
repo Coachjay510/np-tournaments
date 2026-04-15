@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
+import TournamentShare from './TournamentShare'
 import { useState, useEffect, useMemo } from 'react'
 import Topbar from '../components/layout/Topbar'
 import { supabase } from '../supabaseClient'
@@ -44,6 +45,7 @@ export default function TournamentDetail({ director }) {
   const [savingTeam, setSavingTeam] = useState(false)
   const [savingSchedule, setSavingSchedule] = useState(false)
   const [copying, setCopying] = useState(false)
+  const [showShare, setShowShare] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   const [error, setError] = useState('')
@@ -607,6 +609,9 @@ export default function TournamentDetail({ director }) {
         title={tournament.name?.toUpperCase() || 'TOURNAMENT'}
         actions={
           <>
+            <button onClick={() => setShowShare(true)} style={{ background: '#1a2a4a', color: '#7eb3ff', border: '1px solid #1a3a6a', padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              🔗 Share & Invite
+            </button>
             <button onClick={() => navigate('/registrations')} style={ghostButton}>
               Registrations {pending > 0 && `(${pending})`}
             </button>
@@ -1379,6 +1384,17 @@ export default function TournamentDetail({ director }) {
           </div>
         </Modal>
       )}
+      {/* Share Modal */}
+      {showShare && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: '#04060a', border: '1px solid #1a2030', borderRadius: 16, width: '100%', maxWidth: 860, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px', borderBottom: '1px solid #1a2030' }}>
+              <button onClick={() => setShowShare(false)} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 20 }}>✕</button>
+            </div>
+            <TournamentShare tournament={tournament} director={director} teams={teams} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1388,6 +1404,17 @@ function Field({ label, children }) {
     <div>
       <label style={labelStyle}>{label}</label>
       {children}
+      {/* Share Modal */}
+      {showShare && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: '#04060a', border: '1px solid #1a2030', borderRadius: 16, width: '100%', maxWidth: 860, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px', borderBottom: '1px solid #1a2030' }}>
+              <button onClick={() => setShowShare(false)} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 20 }}>✕</button>
+            </div>
+            <TournamentShare tournament={tournament} director={director} teams={teams} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1411,6 +1438,17 @@ function Modal({ title, children, onClose }) {
         </div>
         {children}
       </div>
+      {/* Share Modal */}
+      {showShare && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: '#04060a', border: '1px solid #1a2030', borderRadius: 16, width: '100%', maxWidth: 860, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px', borderBottom: '1px solid #1a2030' }}>
+              <button onClick={() => setShowShare(false)} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 20 }}>✕</button>
+            </div>
+            <TournamentShare tournament={tournament} director={director} teams={teams} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
