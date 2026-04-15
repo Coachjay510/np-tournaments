@@ -28,7 +28,6 @@ import Demo from './pages/Demo'
 import DemoApp from './pages/DemoApp'
 import TournamentLanding from './pages/TournamentLanding'
 import OnboardingWizard from './pages/OnboardingWizard'
-import OnboardingWizard from './pages/OnboardingWizard'
 import VenueDetail from './pages/VenueDetail'
 
 export default function App() {
