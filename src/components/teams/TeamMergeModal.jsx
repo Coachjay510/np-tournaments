@@ -61,6 +61,7 @@ function similarityScore(a = '', b = '') {
 
 export default function TeamMergeModal({ open, onClose, team, onMerged }) {
   const [search, setSearch] = useState('')
+  const [searchById, setSearchById] = useState('')
   const [targets, setTargets] = useState([])
   const [selectedTargetId, setSelectedTargetId] = useState('')
   const [loading, setLoading] = useState(false)
@@ -105,7 +106,13 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
         .order('display_name', { ascending: true })
         .limit(100)
 
-      if (search.trim()) {
+      if (searchById.trim()) {
+        // Search by master ID directly
+        const id = parseInt(searchById.trim())
+        if (!isNaN(id)) {
+          query = query.eq('id', id)
+        }
+      } else if (search.trim()) {
         query = query.ilike('display_name', `%${search.trim()}%`)
       }
 
@@ -123,7 +130,7 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
     }
 
     loadTargets()
-  }, [open, sourceDivision, search, team])
+  }, [open, sourceDivision, search, searchById, team])
 
   const suggestions = useMemo(() => {
     return [...targets]
@@ -170,8 +177,27 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
           .eq('team_id', Number(sourceMasterId))
       }
 
-      // 3. Update the old master team to point to the target
-      // (don't delete — foreign key constraints may block it)
+      // 3. Reassign rankings to target master
+      if (sourceMasterId) {
+        await supabase
+          .from('bt_rankings_with_place')
+          .update({ team_id: targetId })
+          .eq('team_id', Number(sourceMasterId))
+      }
+
+      // 4. Reassign games to target master
+      if (sourceMasterId) {
+        await supabase
+          .from('bt_team_recent_games')
+          .update({ home_team_id: targetId })
+          .eq('home_team_id', Number(sourceMasterId))
+        await supabase
+          .from('bt_team_recent_games')
+          .update({ away_team_id: targetId })
+          .eq('away_team_id', Number(sourceMasterId))
+      }
+
+      // 5. Mark old master as merged
       if (sourceMasterId) {
         await supabase
           .from('bt_master_teams')
@@ -217,12 +243,21 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
             <div style={{ marginBottom: 8, color: '#c0cce0', fontSize: 12, fontWeight: 700 }}>
               Search target master teams
             </div>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search master team..."
-              style={inputStyle}
-            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <input
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setSearchById('') }}
+                placeholder="Search by name..."
+                style={inputStyle}
+              />
+              <input
+                value={searchById}
+                onChange={(e) => { setSearchById(e.target.value); setSearch('') }}
+                placeholder="Search by Master ID..."
+                style={inputStyle}
+                type="number"
+              />
+            </div>
           </div>
 
           <div>
