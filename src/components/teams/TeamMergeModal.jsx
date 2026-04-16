@@ -180,7 +180,7 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
       // 3. Reassign rankings to target master
       if (sourceMasterId) {
         await supabase
-          .from('bt_rankings_with_place')
+          .from('bt_rankings_final')
           .update({ team_id: targetId })
           .eq('team_id', Number(sourceMasterId))
       }
