@@ -62,7 +62,7 @@ export default function OnboardingWizard({ director }) {
 
       if (selectedPlan.action === 'email') {
         // Send notification email via backend
-        await fetch(`${import.meta.env.VITE_BACKEND_URL || 'https://np-backend-production.up.railway.app'}/notify-signup`, {
+        await fetch(`${import.meta.env.VITE_BACKEND_URL || 'https://np-backend-production.up.railway.app'}/api/tournaments/notify-signup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

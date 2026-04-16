@@ -85,7 +85,7 @@ export default function TournamentShare({ tournament, director, teams }) {
 
   async function sendNow(invite) {
     try {
-      await fetch(`${BACKEND}/send-tournament-invite`, {
+      await fetch(`${BACKEND}/api/tournaments/send-invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

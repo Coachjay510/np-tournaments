@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import Topbar from '../components/layout/Topbar'
 import { supabase } from '../supabaseClient'
 
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://np-backend-production.up.railway.app'
+
 export default function Staff({ director }) {
   const [staff, setStaff] = useState([])
   const [refs, setRefs] = useState([])
@@ -64,6 +66,37 @@ export default function Staff({ director }) {
   async function handleRemoveRef(id) {
     await supabase.from('refs').delete().eq('id', id)
     setRefs(prev => prev.filter(r => r.id !== id))
+  }
+
+  async function handleInviteRef(refId) {
+    const { data: tournaments } = await supabase
+      .from('tournaments')
+      .select('id, name')
+      .eq('director_id', director.id)
+      .in('status', ['draft', 'registration_open', 'in_progress'])
+      .order('start_date')
+    
+    if (!tournaments?.length) { alert('No active tournaments found.'); return }
+    
+    const options = tournaments.map((t, i) => `${i + 1}. ${t.name}`).join('\n')
+    const choice = prompt(`Select tournament to invite ref to:\n\n${options}\n\nEnter number:`)
+    if (!choice) return
+    
+    const tournament = tournaments[parseInt(choice) - 1]
+    if (!tournament) { alert('Invalid selection'); return }
+    
+    try {
+      const res = await fetch(`${BACKEND}/api/tournaments/invite-ref`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refId, tournamentId: tournament.id, directorName: director.display_name }),
+      })
+      const data = await res.json()
+      if (data.success) alert(`Invite sent to ref for ${tournament.name}!`)
+      else alert('Error: ' + (data.error || 'Failed to send invite'))
+    } catch (err) {
+      alert('Could not reach backend: ' + err.message)
+    }
   }
 
   const roleColors = {
@@ -159,6 +192,11 @@ export default function Staff({ director }) {
                             </button>
                           </td>
                           <td style={{ ...td, color: '#4a5568', fontSize: 12 }}>—</td>
+                          <td style={td}>
+                            <button onClick={() => handleInviteRef(r.id)} style={{ background: '#1a2a4a', color: '#7eb3ff', border: '1px solid #1a3a6a', padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600, marginRight: 6 }}>
+                              📧 Invite
+                            </button>
+                          </td>
                           <td style={td}><button onClick={() => handleRemoveRef(r.id)} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer' }}>🗑</button></td>
                         </tr>
                       ))}
