@@ -476,6 +476,8 @@ export default function TournamentDetail({ director }) {
     const payload = {
       ...tournament,
       name: copyName || `${tournament.name} Copy`,
+      slug: (copyName || `${tournament.name} Copy`).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now().toString(36),
+      status: 'draft',
       copied_from_tournament_id: tournament.id,
     }
 
