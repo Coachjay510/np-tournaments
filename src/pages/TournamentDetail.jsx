@@ -1384,17 +1384,7 @@ export default function TournamentDetail({ director }) {
           </div>
         </Modal>
       )}
-      {/* Share Modal */}
-      {showShare && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div style={{ background: '#04060a', border: '1px solid #1a2030', borderRadius: 16, width: '100%', maxWidth: 860, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px', borderBottom: '1px solid #1a2030' }}>
-              <button onClick={() => setShowShare(false)} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 20 }}>✕</button>
-            </div>
-            <TournamentShare tournament={tournament} director={director} teams={teams} />
-          </div>
-        </div>
-      )}
+      
     </div>
   )
 }
@@ -1404,17 +1394,7 @@ function Field({ label, children }) {
     <div>
       <label style={labelStyle}>{label}</label>
       {children}
-      {/* Share Modal */}
-      {showShare && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div style={{ background: '#04060a', border: '1px solid #1a2030', borderRadius: 16, width: '100%', maxWidth: 860, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px', borderBottom: '1px solid #1a2030' }}>
-              <button onClick={() => setShowShare(false)} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 20 }}>✕</button>
-            </div>
-            <TournamentShare tournament={tournament} director={director} teams={teams} />
-          </div>
-        </div>
-      )}
+      
     </div>
   )
 }
@@ -1438,17 +1418,7 @@ function Modal({ title, children, onClose }) {
         </div>
         {children}
       </div>
-      {/* Share Modal */}
-      {showShare && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div style={{ background: '#04060a', border: '1px solid #1a2030', borderRadius: 16, width: '100%', maxWidth: 860, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px', borderBottom: '1px solid #1a2030' }}>
-              <button onClick={() => setShowShare(false)} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 20 }}>✕</button>
-            </div>
-            <TournamentShare tournament={tournament} director={director} teams={teams} />
-          </div>
-        </div>
-      )}
+      
     </div>
   )
 }
