@@ -62,7 +62,7 @@ export default function App() {
         <Route path="/demo" element={<DemoApp />} />
         <Route path="/landing" element={<TournamentLanding />} />
         
-        <Route path="/login" element={<Navigate to="/landing" replace />} />
+        <Route path="/login" element={<Login />} />
 
         <Route
           element={
