@@ -170,11 +170,12 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
           .eq('team_id', Number(sourceMasterId))
       }
 
-      // 3. Delete the old master team record so it no longer shows in the list
+      // 3. Update the old master team to point to the target
+      // (don't delete — foreign key constraints may block it)
       if (sourceMasterId) {
         await supabase
           .from('bt_master_teams')
-          .delete()
+          .update({ merged_into_id: targetId, display_name: `[MERGED] ${team.display_name}` })
           .eq('id', Number(sourceMasterId))
       }
 
