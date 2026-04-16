@@ -70,9 +70,7 @@ export default function App() {
           element={
             director 
               ? (!director.onboarded && !director.is_super_admin ? <OnboardingWizard director={director} /> : <AppShell director={director} />)
-              : (window.location.hash.includes('access_token') || window.location.search.includes('code=') 
-                  ? <div style={{minHeight:'100vh',background:'#04060a',display:'flex',alignItems:'center',justifyContent:'center',color:'#5cb800',fontFamily:'Anton, sans-serif',fontSize:24}}>NP TOURNAMENTS</div>
-                  : <Navigate to="/login" />)
+              : <Navigate to="/login" />
           }
         >
           <Route path="/" element={<Dashboard director={director} />} />
