@@ -144,34 +144,47 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
     setError(null)
 
     const sourceMasterId = team.master_team_id
+    const targetId = Number(selectedTargetId)
 
-    if (sourceMasterId) {
-      const { error: linksError } = await supabase
-        .from('bt_team_links')
-        .update({ master_team_id: Number(selectedTargetId) })
-        .eq('master_team_id', Number(sourceMasterId))
-
-      if (linksError) {
-        setError(linksError)
-        setSaving(false)
-        return
+    try {
+      // 1. Update bt_team_links — point all source links to the target master
+      if (sourceMasterId) {
+        const { error: linksError } = await supabase
+          .from('bt_team_links')
+          .update({ master_team_id: targetId })
+          .eq('master_team_id', Number(sourceMasterId))
+        if (linksError) throw linksError
+      } else if (team.id) {
+        const { error: singleError } = await supabase
+          .from('bt_team_links')
+          .update({ master_team_id: targetId })
+          .eq('id', team.id)
+        if (singleError) throw singleError
       }
-    } else if (team.id) {
-      const { error: singleError } = await supabase
-        .from('bt_team_links')
-        .update({ master_team_id: Number(selectedTargetId) })
-        .eq('id', team.id)
 
-      if (singleError) {
-        setError(singleError)
-        setSaving(false)
-        return
+      // 2. Update tournament_teams — any tournament entries using old master ID
+      if (sourceMasterId) {
+        await supabase
+          .from('tournament_teams')
+          .update({ team_id: targetId })
+          .eq('team_id', Number(sourceMasterId))
       }
+
+      // 3. Delete the old master team record so it no longer shows in the list
+      if (sourceMasterId) {
+        await supabase
+          .from('bt_master_teams')
+          .delete()
+          .eq('id', Number(sourceMasterId))
+      }
+
+      setSaving(false)
+      onMerged?.()
+      onClose?.()
+    } catch (err) {
+      setError(err)
+      setSaving(false)
     }
-
-    setSaving(false)
-    onMerged?.()
-    onClose?.()
   }
 
   return (
