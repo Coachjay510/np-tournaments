@@ -12,7 +12,7 @@ export default function Login() {
     setError('')
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin + '/' }
+      options: { redirectTo: 'https://np-tournaments.vercel.app', skipBrowserRedirect: false }
     })
     if (error) { setError(error.message); setLoading(false) }
   }
