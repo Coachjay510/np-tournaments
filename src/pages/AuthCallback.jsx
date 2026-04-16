@@ -6,10 +6,22 @@ export default function AuthCallback() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigate('/', { replace: true })
-      else navigate('/login', { replace: true })
-    })
+    const code = new URLSearchParams(window.location.search).get('code')
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+        if (error) {
+          console.error('Auth callback error:', error)
+          navigate('/login', { replace: true })
+        } else {
+          navigate('/', { replace: true })
+        }
+      })
+    } else {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) navigate('/', { replace: true })
+        else navigate('/login', { replace: true })
+      })
+    }
   }, [])
 
   return (
