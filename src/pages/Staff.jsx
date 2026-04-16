@@ -68,6 +68,30 @@ export default function Staff({ director }) {
     setRefs(prev => prev.filter(r => r.id !== id))
   }
 
+  async function handleSMSRef(refId) {
+    const { data: tournaments } = await supabase
+      .from('tournaments').select('id, name')
+      .eq('director_id', director.id)
+      .in('status', ['draft', 'registration_open', 'in_progress'])
+      .order('start_date')
+    if (!tournaments?.length) { alert('No active tournaments found.'); return }
+    const options = tournaments.map((t, i) => `${i + 1}. ${t.name}`).join('\n')
+    const choice = prompt(`Select tournament:\n\n${options}\n\nEnter number:`)
+    if (!choice) return
+    const tournament = tournaments[parseInt(choice) - 1]
+    if (!tournament) { alert('Invalid selection'); return }
+    try {
+      const res = await fetch(`${BACKEND}/api/sms/invite-ref`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refId, tournamentId: tournament.id, directorName: director.display_name }),
+      })
+      const data = await res.json()
+      if (data.success) alert(`SMS sent to ref for ${tournament.name}!`)
+      else alert('Error: ' + (data.error || 'Failed'))
+    } catch (err) { alert('Backend error: ' + err.message) }
+  }
+
   async function handleInviteRef(refId) {
     const { data: tournaments } = await supabase
       .from('tournaments')
@@ -195,6 +219,9 @@ export default function Staff({ director }) {
                           <td style={td}>
                             <button onClick={() => handleInviteRef(r.id)} style={{ background: '#1a2a4a', color: '#7eb3ff', border: '1px solid #1a3a6a', padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600, marginRight: 6 }}>
                               📧 Invite
+                            </button>
+                            <button onClick={() => handleSMSRef(r.id)} style={{ background: '#1a1500', color: '#d4a017', border: '1px solid #3a3000', padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>
+                              💬 SMS
                             </button>
                           </td>
                           <td style={td}><button onClick={() => handleRemoveRef(r.id)} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer' }}>🗑</button></td>
