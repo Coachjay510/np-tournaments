@@ -9,6 +9,17 @@ export function useDirector() {
   const fetchingRef = useRef(false)
 
   useEffect(() => {
+    // Handle OAuth callback — exchange code for session
+    const url = new URL(window.location.href)
+    const code = url.searchParams.get('code')
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+        if (!error && data?.session) {
+          window.history.replaceState({}, '', '/')
+        }
+      })
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) fetchDirector(session.user.id, session.user.email)
       else setLoading(false)
