@@ -28,6 +28,7 @@ import Demo from './pages/Demo'
 import DemoApp from './pages/DemoApp'
 import TournamentLanding from './pages/TournamentLanding'
 import OnboardingWizard from './pages/OnboardingWizard'
+import AuthCallback from './pages/AuthCallback'
 import VenueDetail from './pages/VenueDetail'
 
 export default function App() {
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="/demo" element={<DemoApp />} />
         <Route path="/landing" element={<TournamentLanding />} />
         
+        <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/login" element={<Login />} />
 
         <Route
