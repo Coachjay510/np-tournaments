@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import VenueBlueprintBuilder from '../components/VenueBlueprintBuilder'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
@@ -25,6 +26,7 @@ export default function VenueDetail() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showBlueprint, setShowBlueprint] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({})
 
@@ -305,6 +307,13 @@ export default function VenueDetail() {
           ))}
         </div>
       </div>
+
+      {/* Blueprint */}
+      {showBlueprint && venue && (
+        <div style={{ height: 600, border: '1px solid #1a2030', borderRadius: 12, overflow: 'hidden', marginBottom: 20 }}>
+          <VenueBlueprintBuilder venueId={venue.id} venueName={venue.name} />
+        </div>
+      )}
 
       {/* Delete confirm */}
       {confirmDelete && (
