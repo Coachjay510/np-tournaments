@@ -308,11 +308,14 @@ export default function VenueDetail() {
         </div>
       </div>
 
-      {/* Blueprint */}
+      {/* Blueprint Modal */}
       {showBlueprint && venue && (
-        <div style={{ height: 600, border: '1px solid #1a2030', borderRadius: 12, overflow: 'hidden', marginBottom: 20 }}>
-          <VenueBlueprintBuilder venueId={venue.id} venueName={venue.name} />
-        </div>
+        <VenueBlueprintBuilder
+          venueId={venue.id}
+          venueName={venue.name}
+          gyms={gyms}
+          onClose={() => setShowBlueprint(false)}
+        />
       )}
 
       {/* Delete confirm */}
