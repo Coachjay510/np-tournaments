@@ -154,6 +154,7 @@ export default function VenueDetail() {
           {!editing ? (
             <>
               <button onClick={() => setEditing(true)} style={{ ...btnStyle('blue'), border: '1px solid #1a3a6a' }}>✏️ Edit</button>
+              <button onClick={() => setShowBlueprint(true)} style={{ background: 'rgba(92,184,0,0.1)', color: '#5cb800', border: '1px solid rgba(92,184,0,0.3)', padding: '8px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>🗺 Blueprint</button>
               <button onClick={() => setConfirmDelete(true)} style={{ background: '#2a0f0f', color: '#ff9d7a', border: '1px solid #4b1d1d', padding: '8px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>🗑 Delete</button>
             </>
           ) : (
@@ -309,6 +310,15 @@ export default function VenueDetail() {
       </div>
 
       {/* Blueprint Modal */}
+      {showBlueprint && venue && (
+        <VenueBlueprintBuilder
+          venueId={venue.id}
+          venueName={venue.name}
+          gyms={gyms}
+          onClose={() => setShowBlueprint(false)}
+        />
+      )}
+
       {showBlueprint && venue && (
         <VenueBlueprintBuilder
           venueId={venue.id}
