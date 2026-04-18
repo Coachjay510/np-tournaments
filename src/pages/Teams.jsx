@@ -234,7 +234,7 @@ export default function Teams() {
                       <tr key={team.id} style={{ borderBottom: '1px solid #0e1320' }}>
                         {/* Primary: source team name */}
                         <td style={{ padding: '13px 14px', color: '#f0f4ff', fontWeight: 700 }}>
-                          {team.source_team_name || '—'}
+                          {team.bt_master_teams?.display_name || team.source_team_name || '—'}
                         </td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>{team.ranking_source}</td>
                         <td style={{ padding: '13px 14px', color: '#6b7a99', fontSize: 12 }}>{team.ranking_division_key || '—'}</td>
