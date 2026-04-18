@@ -84,7 +84,7 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
   }, [open, sourceName])
 
   useEffect(() => {
-    if (!open || !sourceDivision) return
+    if (!open) return
 
     const loadTargets = async () => {
       setLoading(true)
@@ -102,7 +102,6 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
             org_name
           )
         `)
-        .eq('ranking_division_key', sourceDivision)
         .order('display_name', { ascending: true })
         .limit(100)
 
@@ -130,7 +129,7 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
     }
 
     loadTargets()
-  }, [open, sourceDivision, search, searchById, team])
+  }, [open, search, searchById, team])
 
   const suggestions = useMemo(() => {
     return [...targets]
