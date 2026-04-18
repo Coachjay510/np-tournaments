@@ -16,8 +16,8 @@ const ELEMENT_DEFS = {
   table_round:    { label: 'Round Table',    icon: '⭕', w: 50,  h: 50,  color: '#2b1a0d', category: 'furniture', shape: 'circle' },
   table_rect:     { label: 'Rect Table',     icon: '⬜', w: 80,  h: 40,  color: '#2b1a0d', category: 'furniture' },
   scoreboard:     { label: 'Scoreboard',     icon: '📺', w: 70,  h: 40,  color: '#0d0d2b', category: 'furniture' },
-  wall_h:         { label: 'Wall (H)',       icon: '▬',  w: 120, h: 12,  color: '#3a3a3a', category: 'structure' },
-  wall_v:         { label: 'Wall (V)',       icon: '▮',  w: 12,  h: 120, color: '#3a3a3a', category: 'structure' },
+  wall_h:         { label: 'Wall (H)',       icon: '▬',  w: 120, h: 12,  color: '#4a4a5a', category: 'structure' },
+  wall_v:         { label: 'Wall (V)',       icon: '▮',  w: 12,  h: 120, color: '#4a4a5a', category: 'structure' },
   wall_corner:    { label: 'Corner',         icon: '◼',  w: 12,  h: 12,  color: '#3a3a3a', category: 'structure' },
   bathroom:       { label: 'Bathroom',       icon: '🚻', w: 55,  h: 55,  color: '#1a1a2b', category: 'facilities' },
   stairs:         { label: 'Stairs',         icon: '🪜', w: 50,  h: 50,  color: '#2b2b1a', category: 'facilities' },
@@ -68,6 +68,50 @@ function CourtSVG({ type, w, h }) {
   return null
 }
 
+
+function ResizeHandle({ direction, onResize }) {
+  const dragging = useRef(false)
+  const startX = useRef(0)
+  const startY = useRef(0)
+
+  function onMouseDown(e) {
+    e.stopPropagation()
+    dragging.current = true
+    startX.current = e.clientX
+    startY.current = e.clientY
+    const onMove = (ev) => {
+      if (!dragging.current) return
+      const dx = ev.clientX - startX.current
+      const dy = ev.clientY - startY.current
+      startX.current = ev.clientX
+      startY.current = ev.clientY
+      onResize(dx, dy, direction)
+    }
+    const onUp = () => {
+      dragging.current = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  const pos = {
+    right:  { right: -6, top: '50%', transform: 'translateY(-50%)', cursor: 'ew-resize', width: 12, height: 20 },
+    left:   { left: -6,  top: '50%', transform: 'translateY(-50%)', cursor: 'ew-resize', width: 12, height: 20 },
+    bottom: { bottom: -6, left: '50%', transform: 'translateX(-50%)', cursor: 'ns-resize', width: 20, height: 12 },
+    top:    { top: -6,    left: '50%', transform: 'translateX(-50%)', cursor: 'ns-resize', width: 20, height: 12 },
+  }[direction]
+
+  return (
+    <div onMouseDown={onMouseDown} style={{
+      position: 'absolute', ...pos,
+      background: '#5cb800', borderRadius: 3, zIndex: 20,
+      opacity: 0.8,
+    }} />
+  )
+}
+
 function BlueprintElement({ el, selected, onSelect, onUpdate }) {
   const dragging = useRef(false)
   const offset = useRef({ x: 0, y: 0 })
@@ -107,6 +151,18 @@ function BlueprintElement({ el, selected, onSelect, onUpdate }) {
       zIndex: selected ? 10 : 1, overflow: 'hidden',
     }}>
       {(el.type === 'full_court' || el.type === 'half_court') && <CourtSVG type={el.type} w={w} h={h} />}
+      {selected && el.type === 'wall_h' && (
+        <>
+          <ResizeHandle direction="right" onResize={(dx) => onUpdate(el.id, { w: Math.max(20, (el.w || 120) + dx) })} />
+          <ResizeHandle direction="left" onResize={(dx) => onUpdate(el.id, { w: Math.max(20, (el.w || 120) - dx), x: el.x + dx })} />
+        </>
+      )}
+      {selected && el.type === 'wall_v' && (
+        <>
+          <ResizeHandle direction="bottom" onResize={(_, dy) => onUpdate(el.id, { h: Math.max(20, (el.h || 120) + dy) })} />
+          <ResizeHandle direction="top" onResize={(_, dy) => onUpdate(el.id, { h: Math.max(20, (el.h || 120) - dy), y: el.y + dy })} />
+        </>
+      )}
       <div style={{ position: 'relative', zIndex: 2, textAlign: 'center', pointerEvents: 'none' }}>
         <div style={{ fontSize: el.type.includes('court') ? 20 : w < 30 ? 10 : 14, lineHeight: 1 }}>{def.icon}</div>
         {w > 35 && (
@@ -272,7 +328,7 @@ export default function VenueBlueprintBuilder({ venueId, venueName, gyms = [], o
           {loading ? (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4a5568' }}>Loading...</div>
           ) : (
-            <div style={{ position: 'absolute', inset: 0 }} onClick={() => setSelected(null)}>
+            <div style={{ position: 'absolute', inset: 0 }} onMouseDown={(e) => { if (e.target === e.currentTarget) setSelected(null) }}>
               {elements.map(el => (
                 <BlueprintElement key={el.id} el={el} selected={selected === el.id} onSelect={setSelected} onUpdate={updateElement} />
               ))}
@@ -312,6 +368,21 @@ export default function VenueBlueprintBuilder({ venueId, venueName, gyms = [], o
                 ))}
               </div>
 
+              {(selectedEl.type === 'wall_h' || selectedEl.type === 'wall_v') && (
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontSize: 10, color: '#4a5568', display: 'block', marginBottom: 6 }}>
+                    {selectedEl.type === 'wall_h' ? 'LENGTH' : 'HEIGHT'} PRESETS
+                  </label>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {[40, 80, 120, 160, 200, 300].map(size => (
+                      <button key={size} onClick={() => updateElement(selected, selectedEl.type === 'wall_h' ? { w: size } : { h: size })} style={{
+                        padding: '3px 7px', borderRadius: 4, fontSize: 10, cursor: 'pointer', fontWeight: 600,
+                        background: '#0e1320', color: '#6b7a99', border: '1px solid #1a2030',
+                      }}>{size}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 10, color: '#4a5568', display: 'block', marginBottom: 6 }}>ROTATION</label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, marginBottom: 8 }}>
