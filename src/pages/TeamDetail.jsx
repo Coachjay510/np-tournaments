@@ -28,6 +28,7 @@ export default function TeamDetail() {
     organization_id: '', graduating_year: '', contact_name: '', contact_email: '', contact_phone: '',
   })
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
@@ -59,7 +60,8 @@ export default function TeamDetail() {
       contact_email: form.contact_email || null,
       contact_phone: form.contact_phone || null,
     })
-    navigate('/teams')
+    setSaveSuccess(true)
+    setTimeout(() => setSaveSuccess(false), 3000)
   }
 
   async function handleDelete() {
@@ -78,6 +80,8 @@ export default function TeamDetail() {
             <button onClick={() => navigate('/teams')} style={{ background: 'transparent', color: '#6b7a99', border: '1px solid #1a2030', padding: '8px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>← Back</button>
             <button onClick={() => setConfirmDelete(true)} style={{ background: '#2a0f0f', color: '#ff9d7a', border: '1px solid #4b1d1d', padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
             <button onClick={refresh} style={{ background: 'transparent', color: '#d8e0f0', border: '1px solid #1a2030', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Refresh</button>
+            {saveSuccess && <span style={{ color: '#5cb800', fontSize: 12, fontWeight: 700 }}>✓ Saved!</span>}
+            {error && <span style={{ color: '#ef4444', fontSize: 12 }}>{error.message}</span>}
             <button onClick={handleSave} disabled={saving} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
               {saving ? 'Saving...' : 'Save Team'}
             </button>
