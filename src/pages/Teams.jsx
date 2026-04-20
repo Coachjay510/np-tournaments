@@ -34,6 +34,9 @@ const SORT_OPTIONS = [
 
 const PER_PAGE = 25
 
+const thStyle = { padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '1px', color: '#4a5568', textTransform: 'uppercase', borderBottom: '1px solid #1a2030' }
+const badgeStyle = (color) => ({ display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: color === 'green' ? 'rgba(92,184,0,0.12)' : 'rgba(239,68,68,0.12)', color: color === 'green' ? '#5cb800' : '#ef4444', border: `1px solid ${color === 'green' ? 'rgba(92,184,0,0.3)' : 'rgba(239,68,68,0.3)'}` })
+
 export default function Teams() {
   const navigate = useNavigate()
   const { teams, loading, error, refresh } = useTeamsAdmin()
