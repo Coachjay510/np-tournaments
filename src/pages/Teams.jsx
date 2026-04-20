@@ -11,81 +11,9 @@ function StatCard({ label, value, accent = '#f0f4ff' }) {
     <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 12, padding: 16 }}>
       <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '1.2px', color: '#4a5568', marginBottom: 8 }}>{label}</div>
       <div style={{ fontFamily: 'Anton, sans-serif', fontSize: 30, color: accent, lineHeight: 1, letterSpacing: '0.5px' }}>{value}</div>
-      {/* Age-Up Modal */}
-      {showAgeUp && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:'#080c12', border:'1px solid #1a2030', borderRadius:14, padding:28, width:620, maxHeight:'80vh', display:'flex', flexDirection:'column' }}>
-            <div style={{ fontFamily:'Anton, sans-serif', fontSize:20, color:'#f0f4ff', marginBottom:4 }}>📅 AGE-UP PREVIEW</div>
-            <div style={{ fontSize:12, color:'#4a5568', marginBottom:16 }}>{ageUpPreview.length} teams will be updated on September 1 season reset.</div>
-            <div style={{ flex:1, overflowY:'auto', marginBottom:16 }}>
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-                <thead>
-                  <tr style={{ background:'#0a0f1a' }}>
-                    {['TEAM','AGE','DIVISION'].map(h => <th key={h} style={{ padding:'8px 12px', textAlign:'left', color:'#4a5568', fontWeight:700 }}>{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {ageUpPreview.map(t => (
-                    <tr key={t.id} style={{ borderBottom:'1px solid #0d1320' }}>
-                      <td style={{ padding:'8px 12px', color:'#c0cce0' }}>{t.name}</td>
-                      <td style={{ padding:'8px 12px' }}>
-                        <span style={{ color:'#ef4444' }}>{t.oldAge}</span>
-                        <span style={{ color:'#4a5568', margin:'0 6px' }}>→</span>
-                        <span style={{ color:'#5cb800' }}>{t.newAge}</span>
-                      </td>
-                      <td style={{ padding:'8px 12px' }}>
-                        <span style={{ color:'#ef4444', fontSize:11 }}>{t.oldDiv}</span>
-                        <span style={{ color:'#4a5568', margin:'0 6px' }}>→</span>
-                        <span style={{ color:'#5cb800', fontSize:11 }}>{t.newDiv}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-              <button onClick={() => setShowAgeUp(false)} style={{ background:'transparent', color:'#6b7a99', border:'1px solid #1a2030', padding:'8px 16px', borderRadius:8, fontSize:13, cursor:'pointer' }}>Cancel</button>
-              <button onClick={handleAgeUp} disabled={agingUp} style={{ background:'#d4a017', color:'#04060a', border:'none', padding:'8px 20px', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer' }}>
-                {agingUp ? 'Updating...' : 'Age Up ' + ageUpPreview.length + ' Teams'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   )
 }
-
-function badgeStyle(linked) {
-  return {
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: '0.4px',
-    background: linked ? '#0d1a0a' : '#2a130f',
-    color: linked ? '#5cb800' : '#ffb38a',
-    border: linked ? '1px solid #1a3a0a' : '1px solid #4b251d',
-  }
-}
-
-const btnStyle = (color) => ({
-  padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-  cursor: 'pointer', border: 'none',
-  background: color === 'green' ? '#5cb800' : color === 'orange' ? '#d4630a' : color === 'red' ? '#8b1a1a' : '#1a2a4a',
-  color: color === 'green' ? '#04060a' : '#fff',
-})
-
-const SORT_OPTIONS = [
-  { value: 'source_asc', label: 'Team Name A→Z' },
-  { value: 'source_desc', label: 'Team Name Z→A' },
-  { value: 'master_asc', label: 'Master Team A→Z' },
-  { value: 'master_desc', label: 'Master Team Z→A' },
-  { value: 'division_asc', label: 'Division A→Z' },
-  { value: 'org_asc', label: 'Org A→Z' },
-  { value: 'status_linked', label: 'Linked First' },
-  { value: 'status_unlinked', label: 'Unlinked First' },
-]
-
-const PER_PAGE = 25
 
 export default function Teams() {
   const navigate = useNavigate()
