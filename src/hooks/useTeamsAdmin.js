@@ -22,16 +22,18 @@ export function useTeamsAdmin() {
             source_team_id,
             source_team_name,
             master_team_id,
-            bt_master_teams (
+            bt_master_teams!inner (
               id,
               display_name,
               organization_id,
+              merged_into_id,
               bt_organizations (
                 id,
                 org_name
               )
             )
           `)
+          .is('bt_master_teams.merged_into_id', null)
           .order('ranking_source', { ascending: true })
           .order('ranking_division_key', { ascending: true })
           .order('source_team_name', { ascending: true })
