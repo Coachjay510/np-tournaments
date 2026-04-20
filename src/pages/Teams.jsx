@@ -15,6 +15,25 @@ function StatCard({ label, value, accent = '#f0f4ff' }) {
   )
 }
 
+const btnStyle = (color) => ({
+  padding: '6px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none',
+  background: color === 'green' ? '#5cb800' : color === 'orange' ? '#d4630a' : color === 'red' ? '#8b1a1a' : '#1a2a4a',
+  color: color === 'green' ? '#04060a' : '#fff',
+})
+
+const SORT_OPTIONS = [
+  { value: 'source_asc', label: 'Team Name A→Z' },
+  { value: 'source_desc', label: 'Team Name Z→A' },
+  { value: 'master_asc', label: 'Master Team A→Z' },
+  { value: 'master_desc', label: 'Master Team Z→A' },
+  { value: 'division_asc', label: 'Division A→Z' },
+  { value: 'org_asc', label: 'Org A→Z' },
+  { value: 'status_linked', label: 'Linked First' },
+  { value: 'status_unlinked', label: 'Unlinked First' },
+]
+
+const PER_PAGE = 25
+
 export default function Teams() {
   const navigate = useNavigate()
   const { teams, loading, error, refresh } = useTeamsAdmin()
