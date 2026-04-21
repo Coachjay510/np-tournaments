@@ -26,6 +26,7 @@ export function useGameResults({
 } = {}) {
   const [scheduledGames, setScheduledGames] = useState([])
   const [circuitGames, setCircuitGames] = useState([])
+  const [tournamentsById, setTournamentsById] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -37,6 +38,9 @@ export function useGameResults({
       const tasks = []
 
       // ── Scheduled games (live tournament feed) ──────────────────────────
+      // We only join event_divisions here because that FK is defined.
+      // tournaments + courts are fetched/resolved separately to avoid
+      // "Could not find a relationship" errors when no FK is configured.
       if (includeScheduled && circuit !== 'circuit-only') {
         let q = supabase
           .from('scheduled_games')
@@ -54,9 +58,7 @@ export function useGameResults({
             status,
             round,
             pool_name,
-            division:event_divisions(id, name, gender, age_group, division_key),
-            court:courts(name, venue_name),
-            tournament:tournaments(id, name, slug)
+            division:event_divisions(id, name, gender, age_group, division_key)
           `)
           .order('scheduled_date', { ascending: false })
           .order('scheduled_time', { ascending: false })
@@ -110,8 +112,27 @@ export function useGameResults({
       if (schedRes.error) throw schedRes.error
       if (circuitRes.error) throw circuitRes.error
 
+      // ── Resolve tournament names in a separate query ─────────────────────
+      // Avoids needing a FK relationship defined in Supabase.
+      const tournamentIds = [...new Set(
+        (schedRes.data || [])
+          .map((g) => g.tournament_id)
+          .filter(Boolean)
+      )]
+
+      let tournamentMap = {}
+      if (tournamentIds.length) {
+        const { data: tourneys, error: tErr } = await supabase
+          .from('tournaments')
+          .select('id, name, slug')
+          .in('id', tournamentIds)
+        if (tErr) throw tErr
+        tournamentMap = Object.fromEntries((tourneys || []).map((t) => [t.id, t]))
+      }
+
       setScheduledGames(schedRes.data || [])
       setCircuitGames(circuitRes.data || [])
+      setTournamentsById(tournamentMap)
     } catch (err) {
       console.error('Error loading game results:', err)
       setError(err)
@@ -132,34 +153,37 @@ export function useGameResults({
 
   // ── Normalize to a single shape, then filter client-side ─────────────────
   const rows = useMemo(() => {
-    const normalizedScheduled = (scheduledGames || []).map((g) => ({
-      id: `sched:${g.id}`,
-      source_type: 'tournament',
-      circuit_label: g.tournament?.name || 'Next Play Tournament',
-      ranking_source: null,
-      tournament_id: g.tournament_id,
-      tournament_name: g.tournament?.name || null,
-      tournament_slug: g.tournament?.slug || null,
-      date: g.scheduled_date,
-      time: g.scheduled_time,
-      division_key: g.division?.division_key || null,
-      division_name: g.division?.name || null,
-      gender: g.division?.gender || null,
-      age_group: g.division?.age_group || null,
-      home_team_id: g.home_team_id,
-      away_team_id: g.away_team_id,
-      home_team_name: g.home_team_name || 'TBD',
-      away_team_name: g.away_team_name || 'TBD',
-      home_score: g.home_score,
-      away_score: g.away_score,
-      status: g.status,
-      round: g.round,
-      pool_name: g.pool_name,
-      venue_name: g.court?.venue_name || null,
-      court_name: g.court?.name || null,
-      scored: g.home_score != null && g.away_score != null,
-      raw: g,
-    }))
+    const normalizedScheduled = (scheduledGames || []).map((g) => {
+      const t = tournamentsById[g.tournament_id]
+      return {
+        id: `sched:${g.id}`,
+        source_type: 'tournament',
+        circuit_label: t?.name || 'Next Play Tournament',
+        ranking_source: null,
+        tournament_id: g.tournament_id,
+        tournament_name: t?.name || null,
+        tournament_slug: t?.slug || null,
+        date: g.scheduled_date,
+        time: g.scheduled_time,
+        division_key: g.division?.division_key || null,
+        division_name: g.division?.name || null,
+        gender: g.division?.gender || null,
+        age_group: g.division?.age_group || null,
+        home_team_id: g.home_team_id,
+        away_team_id: g.away_team_id,
+        home_team_name: g.home_team_name || 'TBD',
+        away_team_name: g.away_team_name || 'TBD',
+        home_score: g.home_score,
+        away_score: g.away_score,
+        status: g.status,
+        round: g.round,
+        pool_name: g.pool_name,
+        venue_name: null,
+        court_name: null,
+        scored: g.home_score != null && g.away_score != null,
+        raw: g,
+      }
+    })
 
     const normalizedCircuit = (circuitGames || []).map((g) => ({
       id: `circuit:${g.game_id}:${g.ranking_source}`,
@@ -218,7 +242,7 @@ export function useGameResults({
     })
 
     return combined
-  }, [scheduledGames, circuitGames, team, divisionKey, gender])
+  }, [scheduledGames, circuitGames, tournamentsById, team, divisionKey, gender])
 
   // ── Derived option lists for filter dropdowns ────────────────────────────
   const divisionOptions = useMemo(() => {
