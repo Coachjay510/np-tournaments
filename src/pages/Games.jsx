@@ -50,11 +50,13 @@ export default function Games() {
   const [dateFrom, setDateFrom] = useState(null)
   const [dateTo, setDateTo] = useState(null)
   const [circuit, setCircuit] = useState('all')
+  const [host, setHost] = useState('all')
+  const [status, setStatus] = useState('all')
   const [page, setPage] = useState(1)
 
   const [editingGame, setEditingGame] = useState(null)
 
-  const { rows, divisionOptions, circuitOptions, loading, error, refresh, counts } =
+  const { rows, divisionOptions, circuitOptions, hostOptions, loading, error, refresh, counts } =
     useGameResults({
       team,
       divisionKey,
@@ -62,13 +64,15 @@ export default function Games() {
       dateFrom,
       dateTo,
       circuit,
+      host,
+      status,
       scoredOnly: false, // admin sees everything
     })
 
   // Reset pagination when filters change
   useEffect(() => {
     setPage(1)
-  }, [team, divisionKey, gender, dateFrom, dateTo, circuit])
+  }, [team, divisionKey, gender, dateFrom, dateTo, circuit, host, status])
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PER_PAGE))
   const pagedRows = useMemo(
@@ -83,6 +87,8 @@ export default function Games() {
     setDateFrom(null)
     setDateTo(null)
     setCircuit('all')
+    setHost('all')
+    setStatus('all')
   }
 
   return (
@@ -156,6 +162,11 @@ export default function Games() {
               circuit={circuit}
               onCircuitChange={setCircuit}
               circuitOptions={circuitOptions}
+              host={host}
+              onHostChange={setHost}
+              hostOptions={hostOptions}
+              status={status}
+              onStatusChange={setStatus}
               onClear={clearFilters}
             />
           </div>

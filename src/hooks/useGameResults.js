@@ -19,6 +19,8 @@ export function useGameResults({
   dateFrom = null,
   dateTo = null,
   circuit = 'all',            // 'all' | 'tournaments' (live only) | a ranking_source string
+  host = 'all',               // 'all' or a specific host name (from host_org / ranking_source)
+  status = 'all',             // 'all' | 'final' | 'scheduled'
   tournamentId = null,        // scope to a single tournament (admin view)
   scoredOnly = false,         // true for public view
   includeScheduled = true,    // include scheduled_games source
@@ -124,7 +126,7 @@ export function useGameResults({
       if (tournamentIds.length) {
         const { data: tourneys, error: tErr } = await supabase
           .from('tournaments')
-          .select('id, name, slug')
+          .select('id, name, slug, host_org')
           .in('id', tournamentIds)
         if (tErr) throw tErr
         tournamentMap = Object.fromEntries((tourneys || []).map((t) => [t.id, t]))
@@ -160,11 +162,13 @@ export function useGameResults({
       const ageKey = (g.division?.age_group || '').toLowerCase().replace(/\s+/g, '')
       const genderKey = (g.division?.gender || '').toLowerCase()
       const synthesizedKey = ageKey && genderKey ? `${ageKey}_${genderKey}` : null
+      const hostName = t?.host_org || null
       return {
         id: `sched:${g.id}`,
         source_type: 'tournament',
         circuit_label: t?.name || 'Next Play Tournament',
         ranking_source: null,
+        host: hostName,
         tournament_id: g.tournament_id,
         tournament_name: t?.name || null,
         tournament_slug: t?.slug || null,
@@ -195,13 +199,14 @@ export function useGameResults({
       source_type: 'circuit',
       circuit_label: g.ranking_source || 'Circuit',
       ranking_source: g.ranking_source,
+      host: g.ranking_source || null,
       tournament_id: null,
       tournament_name: null,
       tournament_slug: null,
-      date: g.game_date,
-      time: null,
+      date: (g.game_date || '').slice(0, 10) || null,   // "YYYY-MM-DD HH:mm" → "YYYY-MM-DD"
+      time: extractTimeFromTimestamp(g.game_date),
       division_key: g.ranking_division_key,
-      division_name: null,
+      division_name: g.division_name || null,
       gender: inferGenderFromKey(g.ranking_division_key),
       age_group: inferAgeFromKey(g.ranking_division_key),
       home_team_id: g.home_team_id,
@@ -235,6 +240,14 @@ export function useGameResults({
     if (gender !== 'all') {
       combined = combined.filter((r) => (r.gender || '').toLowerCase() === gender.toLowerCase())
     }
+    if (host !== 'all') {
+      combined = combined.filter((r) => r.host === host)
+    }
+    if (status === 'final') {
+      combined = combined.filter((r) => r.scored)
+    } else if (status === 'scheduled') {
+      combined = combined.filter((r) => !r.scored)
+    }
 
     // Sort newest first, with times as tiebreaker
     combined.sort((a, b) => {
@@ -247,7 +260,7 @@ export function useGameResults({
     })
 
     return combined
-  }, [scheduledGames, circuitGames, tournamentsById, team, divisionKey, gender])
+  }, [scheduledGames, circuitGames, tournamentsById, team, divisionKey, gender, host, status])
 
   // ── Derived option lists for filter dropdowns ────────────────────────────
   const divisionOptions = useMemo(() => {
@@ -269,10 +282,20 @@ export function useGameResults({
     return [...set].sort()
   }, [circuitGames])
 
+  // Host/Director options — combines tournament host_org values with
+  // circuit ranking_source values so you can filter games by who ran them.
+  const hostOptions = useMemo(() => {
+    const set = new Set()
+    Object.values(tournamentsById).forEach((t) => t?.host_org && set.add(t.host_org))
+    circuitGames.forEach((g) => g.ranking_source && set.add(g.ranking_source))
+    return [...set].sort()
+  }, [tournamentsById, circuitGames])
+
   return {
     rows,
     divisionOptions,
     circuitOptions,
+    hostOptions,
     loading,
     error,
     refresh: fetchAll,
@@ -299,4 +322,13 @@ function inferAgeFromKey(key) {
   if (!key) return null
   const match = key.match(/^(\d+(?:_\d+)?u|\d+(?:_\d+)?(?:st|nd|rd|th)?)/i)
   return match ? match[1].toUpperCase() : null
+}
+
+// Pulls "HH:MM" from a "YYYY-MM-DD HH:MM:SS" timestamp string
+function extractTimeFromTimestamp(ts) {
+  if (!ts || typeof ts !== 'string') return null
+  const parts = ts.split(/[ T]/)
+  if (parts.length < 2) return null
+  const timeStr = parts[1].slice(0, 5) // HH:MM
+  return timeStr.match(/^\d{2}:\d{2}$/) ? timeStr : null
 }

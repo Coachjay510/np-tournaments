@@ -18,6 +18,22 @@ const labelStyle = {
   display: 'block',
 }
 
+function pillStyle(active) {
+  return {
+    padding: '8px 16px',
+    borderRadius: 999,
+    border: active ? '1px solid #1a3a0a' : '1px solid #1a2030',
+    background: active ? '#0d1a0a' : 'transparent',
+    color: active ? '#5cb800' : '#c0cce0',
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: '0.5px',
+    textTransform: 'uppercase',
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  }
+}
+
 export default function GameFilters({
   team,
   onTeamChange,
@@ -33,10 +49,30 @@ export default function GameFilters({
   circuit,
   onCircuitChange,
   circuitOptions = [],
+  host,
+  onHostChange,
+  hostOptions = [],
+  status,
+  onStatusChange,
   onClear,
 }) {
   return (
     <div style={{ display: 'grid', gap: 14 }}>
+      {/* Status toggle pills (All / Final / Scheduled) */}
+      {onStatusChange && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={() => onStatusChange('all')} style={pillStyle(status === 'all')}>
+            All Games
+          </button>
+          <button onClick={() => onStatusChange('final')} style={pillStyle(status === 'final')}>
+            ✓ Final
+          </button>
+          <button onClick={() => onStatusChange('scheduled')} style={pillStyle(status === 'scheduled')}>
+            Scheduled
+          </button>
+        </div>
+      )}
+
       <div
         style={{
           display: 'grid',
@@ -81,6 +117,22 @@ export default function GameFilters({
             <option value="girls">Girls</option>
           </select>
         </div>
+
+        {onHostChange && (
+          <div>
+            <span style={labelStyle}>Host / Director</span>
+            <select
+              value={host}
+              onChange={(e) => onHostChange(e.target.value)}
+              style={inputStyle}
+            >
+              <option value="all">All hosts</option>
+              {hostOptions.map((h) => (
+                <option key={h} value={h}>{h}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <span style={labelStyle}>Circuit / Source</span>
