@@ -13,6 +13,7 @@ import TeamDetail from './pages/TeamDetail'
 import Organizations from './pages/Organizations'
 import OrganizationDetail from './pages/OrganizationDetail'
 import Schedule from './pages/Schedule'
+import Games from './pages/Games'
 import RefPortal from './pages/RefPortal'
 import Analytics from './pages/Analytics'
 import Financials from './pages/Financials'
@@ -99,6 +100,7 @@ export default function App() {
             element={<OrganizationDetail director={director} />}
           />
           <Route path="/schedule" element={<Schedule director={director} />} />
+          <Route path="/games" element={<Games director={director} />} />
           <Route path="/ref-portal" element={<RefPortal director={director} />} />
           <Route path="/analytics" element={<Analytics director={director} />} />
           <Route path="/financials" element={<Financials director={director} />} />

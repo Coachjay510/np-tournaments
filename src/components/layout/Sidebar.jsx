@@ -10,6 +10,7 @@ const navItems = [
   { to: '/teams', icon: '⛹', label: 'Teams' },
   { to: '/organizations', icon: '🏢', label: 'Organizations' },
   { to: '/schedule', icon: '📅', label: 'Schedule' },
+  { to: '/games', icon: '🏀', label: 'Games & Scores' },
 ]
 
 const reportItems = [
