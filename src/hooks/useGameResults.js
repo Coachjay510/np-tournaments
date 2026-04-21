@@ -58,7 +58,7 @@ export function useGameResults({
             status,
             round,
             pool_name,
-            division:event_divisions(id, name, gender, age_group, division_key)
+            division:event_divisions(id, name, gender, age_group)
           `)
           .order('scheduled_date', { ascending: false })
           .order('scheduled_time', { ascending: false })
@@ -155,6 +155,11 @@ export function useGameResults({
   const rows = useMemo(() => {
     const normalizedScheduled = (scheduledGames || []).map((g) => {
       const t = tournamentsById[g.tournament_id]
+      // event_divisions doesn't carry a division_key, so synthesize one
+      // from age_group + gender so it can be matched against circuit data.
+      const ageKey = (g.division?.age_group || '').toLowerCase().replace(/\s+/g, '')
+      const genderKey = (g.division?.gender || '').toLowerCase()
+      const synthesizedKey = ageKey && genderKey ? `${ageKey}_${genderKey}` : null
       return {
         id: `sched:${g.id}`,
         source_type: 'tournament',
@@ -165,7 +170,7 @@ export function useGameResults({
         tournament_slug: t?.slug || null,
         date: g.scheduled_date,
         time: g.scheduled_time,
-        division_key: g.division?.division_key || null,
+        division_key: synthesizedKey,
         division_name: g.division?.name || null,
         gender: g.division?.gender || null,
         age_group: g.division?.age_group || null,
