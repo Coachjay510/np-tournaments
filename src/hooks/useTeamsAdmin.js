@@ -33,7 +33,6 @@ export function useTeamsAdmin() {
               )
             )
           `)
-          .is('bt_master_teams.merged_into_id', null)
           .order('ranking_source', { ascending: true })
           .order('ranking_division_key', { ascending: true })
           .order('source_team_name', { ascending: true })
@@ -43,7 +42,8 @@ export function useTeamsAdmin() {
         if (!data || data.length < 1000) break
         from += 1000
       }
-      setTeams(allData)
+      // Filter out teams whose master has been merged
+      setTeams(allData.filter(t => !t.bt_master_teams?.merged_into_id))
     } catch (err) {
       console.error('Error loading teams:', err)
       setError(err)

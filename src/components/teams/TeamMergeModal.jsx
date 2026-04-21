@@ -200,7 +200,7 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
       if (sourceMasterId) {
         await supabase
           .from('bt_master_teams')
-          .update({ merged_into_id: targetId, display_name: `[MERGED] ${team.display_name}` })
+          .update({ merged_into_id: targetId, display_name: `[MERGED] ${team.bt_master_teams?.display_name || team.source_team_name || team.master_team_id}` })
           .eq('id', Number(sourceMasterId))
       }
 
