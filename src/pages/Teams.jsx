@@ -72,23 +72,22 @@ export default function Teams() {
     let rows = [...(teams || [])]
     if (source !== 'all') rows = rows.filter((row) => row.ranking_source === source)
     if (division !== 'all') rows = rows.filter((row) => row.ranking_division_key === division)
-    if (linkStatus !== 'all') rows = rows.filter((row) => linkStatus === 'linked' ? !!row.master_team_id : !row.master_team_id)
+    if (linkStatus !== 'all') rows = rows.filter((row) => linkStatus === 'linked' ? (row.bt_team_links?.length > 0) : (row.bt_team_links?.length === 0))
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       rows = rows.filter((row) =>
-        row.source_team_name?.toLowerCase().includes(q) ||
-        row.bt_master_teams?.display_name?.toLowerCase().includes(q) ||
-        row.bt_master_teams?.bt_organizations?.org_name?.toLowerCase().includes(q)
+        row.display_name?.toLowerCase().includes(q) ||
+        row.bt_organizations?.org_name?.toLowerCase().includes(q)
       )
     }
 
     rows.sort((a, b) => {
-      const aSource = a.source_team_name || ''
-      const bSource = b.source_team_name || ''
-      const aMaster = a.bt_master_teams?.display_name || ''
-      const bMaster = b.bt_master_teams?.display_name || ''
-      const aOrg = a.bt_master_teams?.bt_organizations?.org_name || ''
-      const bOrg = b.bt_master_teams?.bt_organizations?.org_name || ''
+      const aSource = a.display_name || ''
+      const bSource = b.display_name || ''
+      const aMaster = a.display_name || ''
+      const bMaster = b.display_name || ''
+      const aOrg = a.bt_organizations?.org_name || ''
+      const bOrg = b.bt_organizations?.org_name || ''
 
       switch (sortBy) {
         case 'source_asc': return aSource.localeCompare(bSource)
@@ -112,9 +111,9 @@ export default function Teams() {
   }, [filteredTeams, page])
 
   const totalPages = Math.max(1, Math.ceil(filteredTeams.length / PER_PAGE))
-  const linkedCount = filteredTeams.filter((t) => !!t.master_team_id).length
-  const unlinkedCount = filteredTeams.filter((t) => !t.master_team_id).length
-  const uniqueMasters = new Set(filteredTeams.map((t) => t.master_team_id).filter(Boolean)).size
+  const linkedCount = filteredTeams.filter((t) => t.bt_team_links?.length > 0).length
+  const unlinkedCount = filteredTeams.filter((t) => !t.bt_team_links?.length).length
+  const uniqueMasters = filteredTeams.length
 
   function goPrev() { setPage((p) => Math.max(1, p - 1)) }
   function goNext() { setPage((p) => Math.min(totalPages, p + 1)) }
@@ -174,7 +173,7 @@ export default function Teams() {
     if (!bulkOrg || selectedIds.size === 0) return
     setBulkSaving(true)
     const masterIds = [...new Set(
-      [...selectedIds].map(id => pagedTeams.find(t => t.id === id)?.master_team_id).filter(Boolean)
+      [...selectedIds]
     )]
     await Promise.all(masterIds.map(mid =>
       supabase.from('bt_master_teams').update({ organization_id: Number(bulkOrg) }).eq('id', mid)
@@ -327,14 +326,19 @@ export default function Teams() {
                         <td style={{ padding:'13px 14px', width:36 }}>
                           <input type='checkbox' checked={selectedIds.has(team.id)} onChange={() => toggleSelect(team.id)} style={{ cursor:'pointer', accentColor:'#5cb800' }} />
                         </td>
-                        {/* Primary: source team name */}
+                        {/* Master team name */}
                         <td style={{ padding: '13px 14px', color: '#f0f4ff', fontWeight: 700 }}>
-                          {team.bt_master_teams?.display_name || team.source_team_name || '—'}
+                          <div>{team.display_name || '—'}</div>
+                          <div style={{ fontSize: 10, color: '#4a5568', marginTop: 2 }}>
+                            {team.bt_team_links?.length || 0} source{(team.bt_team_links?.length || 0) !== 1 ? 's' : ''} · {[...new Set((team.bt_team_links || []).map(l => l.ranking_source))].join(', ')}
+                          </div>
                         </td>
-                        <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>{team.ranking_source}</td>
+                        <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>
+                          {[...new Set((team.bt_team_links || []).map(l => l.ranking_source))].join(', ') || '—'}
+                        </td>
                         <td style={{ padding: '13px 14px', color: '#6b7a99', fontSize: 12 }}>{team.ranking_division_key || '—'}</td>
                         <td style={{ padding: '13px 14px', color: '#c0cce0', fontSize: 12 }}>
-                          {team.bt_master_teams?.bt_organizations?.org_name || <span style={{ color: '#4a5568' }}>No org</span>}
+                          {team.bt_organizations?.org_name || <span style={{ color: '#4a5568' }}>No org</span>}
                         </td>
                         {/* Master team as reference */}
                         <td style={{ padding: '13px 14px', fontSize: 12 }}>
@@ -343,7 +347,7 @@ export default function Teams() {
                             : <span style={{ color: '#4a5568' }}>No master</span>
                           }
                         </td>
-                        <td style={{ padding: '13px 14px', color: '#4a5568', fontSize: 12 }}>{team.master_team_id || '—'}</td>
+                        <td style={{ padding: '13px 14px', color: '#4a5568', fontSize: 12 }}>{team.id}</td>
                         <td style={{ padding: '13px 14px', color: '#4a5568', fontSize: 12 }}>{team.source_team_id}</td>
                         <td style={{ padding: '13px 14px' }}>
                           <span style={badgeStyle(!!team.master_team_id)}>
@@ -352,10 +356,10 @@ export default function Teams() {
                         </td>
                         <td style={{ padding: '13px 14px' }}>
                           <div style={{ display: 'flex', gap: 5 }}>
-                            <button style={btnStyle('blue')} onClick={() => navigate(`/teams/${team.master_team_id || team.id}`)}>View</button>
+                            <button style={btnStyle('blue')} onClick={() => navigate(`/teams/${team.id}`)}>View</button>
                             <button style={btnStyle('orange')} onClick={() => setOrgTeam(team)}>Org</button>
-                            <button style={btnStyle('green')} onClick={() => setMergeTeam(team)}>Merge</button>
-                            <button style={btnStyle('red')} onClick={() => setDeleteConfirm(team)}>✕</button>
+                            <button style={btnStyle('green')} onClick={() => setMergeTeam({...team, master_team_id: team.id, display_name: team.display_name})}>Merge</button>
+                            <button style={btnStyle('red')} onClick={() => setDeleteConfirm({...team, source_team_name: team.display_name})}>✕</button>
                           </div>
                         </td>
                       </tr>
