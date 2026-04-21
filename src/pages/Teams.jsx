@@ -292,10 +292,28 @@ export default function Teams() {
             <div style={{ padding: 40, textAlign: 'center', color: '#4a5568', fontSize: 13 }}>Loading teams...</div>
           ) : (
             <>
+              {/* Bulk Bar */}
+              {selectedIds.size > 0 && (
+                <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:'rgba(92,184,0,0.08)', border:'1px solid rgba(92,184,0,0.2)', borderRadius:8, marginBottom:12 }}>
+                  <span style={{ fontSize:12, color:'#5cb800', fontWeight:700 }}>{selectedIds.size} selected</span>
+                  <select value={bulkOrg} onChange={e => setBulkOrg(e.target.value)} style={{ background:'#0e1320', border:'1px solid #1a2030', color:'#d8e0f0', borderRadius:6, padding:'5px 8px', fontSize:12, outline:'none', width:200 }}>
+                    <option value=''>Assign to org...</option>
+                    {orgs.map(o => <option key={o.id} value={o.id}>{o.org_name}</option>)}
+                  </select>
+                  <button onClick={handleBulkAssignOrg} disabled={!bulkOrg || bulkSaving} style={{ background:'#5cb800', color:'#04060a', border:'none', padding:'6px 14px', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                    {bulkSaving ? 'Saving...' : 'Apply'}
+                  </button>
+                  <button onClick={() => setSelectedIds(new Set())} style={{ background:'transparent', color:'#6b7a99', border:'1px solid #1a2030', padding:'6px 10px', borderRadius:6, fontSize:12, cursor:'pointer' }}>Clear</button>
+                </div>
+              )}
+
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: '#0a0f1a' }}>
+                      <th style={{ width:36, padding:'12px 14px', borderBottom:'1px solid #1a2030' }}>
+                        <input type='checkbox' checked={selectedIds.size === pagedTeams.length && pagedTeams.length > 0} onChange={toggleSelectAll} style={{ cursor:'pointer', accentColor:'#5cb800' }} />
+                      </th>
                       {['Team Name', 'Source', 'Division', 'Org', 'Master Team', 'Master ID', 'Source ID', 'Status', 'Actions'].map((label) => (
                         <th key={label} style={{ textAlign: 'left', padding: '12px 14px', fontSize: 11, color: '#6b7a99', textTransform: 'uppercase', letterSpacing: '1px', borderBottom: '1px solid #1a2030' }}>
                           {label}
@@ -305,7 +323,10 @@ export default function Teams() {
                   </thead>
                   <tbody>
                     {pagedTeams.map((team) => (
-                      <tr key={team.id} style={{ borderBottom: '1px solid #0e1320' }}>
+                      <tr key={team.id} style={{ borderBottom: '1px solid #0e1320', background: selectedIds.has(team.id) ? 'rgba(92,184,0,0.05)' : 'transparent' }}>
+                        <td style={{ padding:'13px 14px', width:36 }}>
+                          <input type='checkbox' checked={selectedIds.has(team.id)} onChange={() => toggleSelect(team.id)} style={{ cursor:'pointer', accentColor:'#5cb800' }} />
+                        </td>
                         {/* Primary: source team name */}
                         <td style={{ padding: '13px 14px', color: '#f0f4ff', fontWeight: 700 }}>
                           {team.bt_master_teams?.display_name || team.source_team_name || '—'}
