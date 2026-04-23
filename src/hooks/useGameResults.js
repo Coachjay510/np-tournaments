@@ -70,7 +70,7 @@ export function useGameResults({
         if (dateTo) q = q.lte('scheduled_date', dateTo)
         if (scoredOnly) q = q.not('home_score', 'is', null).not('away_score', 'is', null)
 
-        tasks.push(q.limit(2000))
+        tasks.push(q.range(0, 1999))
       } else {
         tasks.push(Promise.resolve({ data: [], error: null }))
       }
@@ -104,7 +104,7 @@ export function useGameResults({
           q = q.eq('game_id', '__scope_out__')
         }
 
-        tasks.push(q.limit(5000))
+        tasks.push(q.range(0, 4999))
       } else {
         tasks.push(Promise.resolve({ data: [], error: null }))
       }
