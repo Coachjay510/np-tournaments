@@ -147,8 +147,24 @@ export default function Teams() {
 
   async function handleDeleteTeam(team) {
     setDeleting(true)
-    await supabase.from('bt_team_links').delete().eq('id', team.id)
+
+    // Teams page rows come from bt_master_teams, so `team.id` is the master ID.
+    // Soft-delete by marking merged_into_id to a sentinel we won't use, OR
+    // hard delete if no dependencies. We'll hard-delete for now since the UI
+    // already treats this as permanent.
+    const { error: delErr } = await supabase
+      .from('bt_master_teams')
+      .delete()
+      .eq('id', Number(team.id))
+
     setDeleting(false)
+
+    if (delErr) {
+      alert(`Failed to delete team: ${delErr.message}`)
+      console.error('Delete team error:', delErr)
+      return
+    }
+
     setDeleteConfirm(null)
     refresh()
   }
@@ -172,13 +188,36 @@ export default function Teams() {
   async function handleBulkAssignOrg() {
     if (!bulkOrg || selectedIds.size === 0) return
     setBulkSaving(true)
-    const masterIds = [...new Set(
-      [...selectedIds]
-    )]
-    await Promise.all(masterIds.map(mid =>
-      supabase.from('bt_master_teams').update({ organization_id: Number(bulkOrg) }).eq('id', mid)
-    ))
+
+    const masterIds = [...selectedIds].map(id => Number(id)).filter(n => !Number.isNaN(n))
+
+    // Single update — much faster than N round-trips. The .select() forces
+    // Supabase to return the affected rows so we can detect RLS silently
+    // filtering everything out (data=null, error=null pattern).
+    const { data, error: updateErr } = await supabase
+      .from('bt_master_teams')
+      .update({ organization_id: Number(bulkOrg) })
+      .in('id', masterIds)
+      .select('id')
+
     setBulkSaving(false)
+
+    if (updateErr) {
+      alert(`Failed to assign org: ${updateErr.message}`)
+      console.error('Bulk org assignment error:', updateErr)
+      return
+    }
+
+    if (!data || data.length === 0) {
+      alert(`Update ran but no rows were changed. This usually means a permissions policy blocked the update. Check the browser console.`)
+      console.warn('Bulk org update returned no rows. Expected:', masterIds, 'Got:', data)
+      return
+    }
+
+    if (data.length < masterIds.length) {
+      alert(`Only ${data.length} of ${masterIds.length} teams updated — the rest may be blocked by permissions.`)
+    }
+
     setSelectedIds(new Set())
     setBulkOrg('')
     refresh()
@@ -217,13 +256,37 @@ export default function Teams() {
   async function handleAgeUp() {
     if (!window.confirm('Age up ALL ' + ageUpPreview.length + ' teams by 1 year? This cannot be undone.')) return
     setAgingUp(true)
-    await Promise.all(ageUpPreview.map(t =>
-      supabase.from('bt_master_teams').update({ age_group: t.newAge, ranking_division_key: t.newDiv }).eq('id', t.id)
-    ))
+
+    // Each team gets different age_group/division_key values, so we can't
+    // use a single .in() update — we need per-team updates. But we DO check
+    // each result and report failures instead of swallowing them silently.
+    const results = await Promise.all(
+      ageUpPreview.map(t =>
+        supabase.from('bt_master_teams')
+          .update({ age_group: t.newAge, ranking_division_key: t.newDiv })
+          .eq('id', Number(t.id))
+          .select('id')  // force the response to include affected rows so we can verify
+      )
+    )
+
     setAgingUp(false)
+
+    const failures = results.filter(r => r.error)
+    const noopRows = results.filter(r => !r.error && (!r.data || r.data.length === 0))
+
+    if (failures.length > 0) {
+      console.error('Age-up failures:', failures.map(f => f.error))
+      alert(`Aged up ${ageUpPreview.length - failures.length}/${ageUpPreview.length} teams.\n${failures.length} failed: ${failures[0].error.message}`)
+    } else if (noopRows.length > 0) {
+      // Common cause: RLS policy filtered the rows out — update "succeeded"
+      // but no rows were actually changed.
+      alert(`Warning: ${noopRows.length} teams did not update (possibly blocked by permissions).`)
+    } else {
+      alert(`Done! ${ageUpPreview.length} teams aged up.`)
+    }
+
     setShowAgeUp(false)
     refresh()
-    alert('Done! ' + ageUpPreview.length + ' teams aged up.')
   }
 
   const inputStyle = {

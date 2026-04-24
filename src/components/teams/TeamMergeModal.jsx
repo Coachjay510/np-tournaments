@@ -149,65 +149,89 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
     setSaving(true)
     setError(null)
 
-    const sourceMasterId = team.master_team_id
+    // Row shape flexibility — Teams page wraps rows with master_team_id: team.id,
+    // but we also support callers passing a raw bt_master_teams row.
+    const sourceMasterId = team.master_team_id ?? team.id
     const targetId = Number(selectedTargetId)
+
+    if (!sourceMasterId) {
+      setError(new Error('No source team ID found'))
+      setSaving(false)
+      return
+    }
+
+    if (Number(sourceMasterId) === targetId) {
+      setError(new Error('Cannot merge a team into itself'))
+      setSaving(false)
+      return
+    }
+
+    // Track which steps silently did nothing so we can warn the user.
+    // (data=null with no error = RLS filtered everything out)
+    const warnings = []
 
     try {
       // 1. Update bt_team_links — point all source links to the target master
-      if (sourceMasterId) {
-        const { error: linksError } = await supabase
-          .from('bt_team_links')
-          .update({ master_team_id: targetId })
-          .eq('master_team_id', Number(sourceMasterId))
-        if (linksError) throw linksError
-      } else if (team.id) {
-        const { error: singleError } = await supabase
-          .from('bt_team_links')
-          .update({ master_team_id: targetId })
-          .eq('id', team.id)
-        if (singleError) throw singleError
-      }
+      const { data: linksData, error: linksError } = await supabase
+        .from('bt_team_links')
+        .update({ master_team_id: targetId })
+        .eq('master_team_id', Number(sourceMasterId))
+        .select('id')
+      if (linksError) throw new Error(`bt_team_links: ${linksError.message}`)
+      if (!linksData || linksData.length === 0) warnings.push('bt_team_links (no rows updated — check if any links existed)')
 
       // 2. Update tournament_teams — any tournament entries using old master ID
-      if (sourceMasterId) {
-        await supabase
-          .from('tournament_teams')
-          .update({ team_id: targetId })
-          .eq('team_id', Number(sourceMasterId))
-      }
+      const { data: ttData, error: ttError } = await supabase
+        .from('tournament_teams')
+        .update({ team_id: targetId })
+        .eq('team_id', Number(sourceMasterId))
+        .select('id')
+      if (ttError) throw new Error(`tournament_teams: ${ttError.message}`)
+      // ok if no rows — most teams aren't in tournaments
 
       // 3. Reassign rankings to target master
-      if (sourceMasterId) {
-        await supabase
-          .from('bt_team_results_normalized')
-          .update({ team_id: targetId })
-          .eq('team_id', Number(sourceMasterId))
-      }
+      const { error: rankErr } = await supabase
+        .from('bt_team_results_normalized')
+        .update({ team_id: targetId })
+        .eq('team_id', Number(sourceMasterId))
+      if (rankErr) throw new Error(`bt_team_results_normalized: ${rankErr.message}`)
 
-      // 4. Reassign games to target master
-      if (sourceMasterId) {
-        await supabase
-          .from('bt_team_recent_games')
-          .update({ home_team_id: targetId })
-          .eq('home_team_id', Number(sourceMasterId))
-        await supabase
-          .from('bt_team_recent_games')
-          .update({ away_team_id: targetId })
-          .eq('away_team_id', Number(sourceMasterId))
-      }
+      // 4. Reassign games to target master (home + away)
+      const { error: homeErr } = await supabase
+        .from('bt_team_recent_games')
+        .update({ home_team_id: targetId })
+        .eq('home_team_id', Number(sourceMasterId))
+      if (homeErr) throw new Error(`bt_team_recent_games (home): ${homeErr.message}`)
 
-      // 5. Mark old master as merged
-      if (sourceMasterId) {
-        await supabase
-          .from('bt_master_teams')
-          .update({ merged_into_id: targetId, display_name: `[MERGED] ${team.bt_master_teams?.display_name || team.source_team_name || team.master_team_id}` })
-          .eq('id', Number(sourceMasterId))
+      const { error: awayErr } = await supabase
+        .from('bt_team_recent_games')
+        .update({ away_team_id: targetId })
+        .eq('away_team_id', Number(sourceMasterId))
+      if (awayErr) throw new Error(`bt_team_recent_games (away): ${awayErr.message}`)
+
+      // 5. Mark old master as merged. This is the canary — if this row doesn't
+      // update, the merge didn't really happen as far as the UI is concerned.
+      const mergedLabel = `[MERGED] ${team.bt_master_teams?.display_name || team.display_name || team.source_team_name || sourceMasterId}`
+      const { data: masterData, error: masterErr } = await supabase
+        .from('bt_master_teams')
+        .update({ merged_into_id: targetId, display_name: mergedLabel })
+        .eq('id', Number(sourceMasterId))
+        .select('id')
+      if (masterErr) throw new Error(`bt_master_teams: ${masterErr.message}`)
+      if (!masterData || masterData.length === 0) {
+        throw new Error(`Merge appeared to succeed but no bt_master_teams row was updated (id=${sourceMasterId}). Likely blocked by RLS policy.`)
       }
 
       setSaving(false)
+
+      if (warnings.length > 0) {
+        console.warn('Merge completed with warnings:', warnings)
+      }
+
       onMerged?.()
       onClose?.()
     } catch (err) {
+      console.error('Merge error:', err)
       setError(err)
       setSaving(false)
     }
