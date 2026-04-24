@@ -1368,6 +1368,64 @@ export default function TournamentDetail({ director }) {
         </Modal>
       )}
 
+      {showShare && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.7)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+          }}
+          onClick={() => setShowShare(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#04060a',
+              border: '1px solid #1a2030',
+              borderRadius: 14,
+              width: '100%',
+              maxWidth: 900,
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              position: 'relative',
+            }}
+          >
+            <button
+              onClick={() => setShowShare(false)}
+              style={{
+                position: 'absolute',
+                top: 12,
+                right: 14,
+                background: 'transparent',
+                border: 'none',
+                color: '#6b7a99',
+                fontSize: 24,
+                cursor: 'pointer',
+                zIndex: 10,
+                width: 32,
+                height: 32,
+                borderRadius: 6,
+                lineHeight: 1,
+              }}
+            >
+              ×
+            </button>
+            <TournamentShare
+              tournament={tournament}
+              director={director}
+              teams={teams}
+            />
+          </div>
+        </div>
+      )}
+
       {showCopyModal && (
         <Modal title="Copy Tournament" onClose={() => setShowCopyModal(false)}>
           <input

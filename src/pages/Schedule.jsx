@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Topbar from '../components/layout/Topbar'
 import { supabase } from '../supabaseClient'
+import BracketVisual from '../components/schedule/BracketVisual'
 
 const s = {
   input: { background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none' },
@@ -591,6 +592,7 @@ export default function Schedule({ director }) {
   const [editGame, setEditGame] = useState(null)
   const [editConflict, setEditConflict] = useState(null)
   const [showScheduler, setShowScheduler] = useState(false)
+  const [bracketLayout, setBracketLayout] = useState('table')  // 'table' | 'visual'
 
   useEffect(() => {
     supabase.from('tournaments').select('id, name, start_date').order('start_date', { ascending: false })
@@ -752,7 +754,7 @@ export default function Schedule({ director }) {
             </div>
 
             {/* Action buttons */}
-            <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
               <button onClick={() => setShowScheduler(!showScheduler)} style={s.btn('orange')}>
                 ⚡ {showScheduler ? 'Hide' : 'Show'} Auto Scheduler
               </button>
@@ -763,6 +765,41 @@ export default function Schedule({ director }) {
                 <button onClick={() => { if (window.confirm('Delete all games for this division?')) handleDeleteDivisionGames(activeDivision) }} style={s.btn('red')}>
                   🗑 Clear Games
                 </button>
+              )}
+
+              {/* View layout toggle — table vs visual bracket */}
+              {divisionGames.length > 0 && (
+                <div style={{ display: 'flex', gap: 0, marginLeft: 'auto', border: '1px solid #1a2030', borderRadius: 8, overflow: 'hidden' }}>
+                  <button
+                    onClick={() => setBracketLayout('table')}
+                    style={{
+                      padding: '8px 14px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      background: bracketLayout === 'table' ? '#0d1a0a' : 'transparent',
+                      color: bracketLayout === 'table' ? '#5cb800' : '#6b7a99',
+                      border: 'none',
+                      borderRight: '1px solid #1a2030',
+                    }}
+                  >
+                    ☰ Table
+                  </button>
+                  <button
+                    onClick={() => setBracketLayout('visual')}
+                    style={{
+                      padding: '8px 14px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      background: bracketLayout === 'visual' ? '#0d1a0a' : 'transparent',
+                      color: bracketLayout === 'visual' ? '#5cb800' : '#6b7a99',
+                      border: 'none',
+                    }}
+                  >
+                    🏆 Bracket
+                  </button>
+                </div>
               )}
             </div>
 
@@ -778,12 +815,30 @@ export default function Schedule({ director }) {
             )}
 
             <div style={s.card}>
-              <MatchupView
-                games={divisionGames} divisionKey={activeDivision}
-                onEdit={(game, mode) => mode === 'edit' ? setEditGame(game) : setScoreGame(game)}
-                onBack={() => { setView('schedule'); setActiveDivision(null) }}
-                courtsMap={courtsMap} refsMap={refsMap}
-              />
+              {bracketLayout === 'visual' ? (
+                <div style={{ padding: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                    <button onClick={() => { setView('schedule'); setActiveDivision(null) }} style={{ background: 'none', border: 'none', color: '#6b7a99', cursor: 'pointer', fontSize: 12 }}>← Back</button>
+                    <h2 style={{ margin: 0, fontFamily: 'Anton, sans-serif', fontSize: 20, color: '#5cb800', letterSpacing: '0.5px' }}>{activeDivision} BRACKET</h2>
+                    <span style={{ fontSize: 11, color: '#4a5568' }}>{divisionGames.length} games</span>
+                  </div>
+                  <BracketVisual
+                    games={divisionGames.map(g => ({
+                      ...g,
+                      court: g.court_id ? courtsMap[g.court_id] : null,
+                    }))}
+                    format={inferFormat(divisionGames)}
+                    onScoreClick={(game) => setScoreGame(game)}
+                  />
+                </div>
+              ) : (
+                <MatchupView
+                  games={divisionGames} divisionKey={activeDivision}
+                  onEdit={(game, mode) => mode === 'edit' ? setEditGame(game) : setScoreGame(game)}
+                  onBack={() => { setView('schedule'); setActiveDivision(null) }}
+                  courtsMap={courtsMap} refsMap={refsMap}
+                />
+              )}
             </div>
           </div>
         ) : (
@@ -1034,4 +1089,20 @@ function estimateGames(format, n) {
   if (format === 'pool_play') { const ps = n <= 6 ? 3 : 4; const p = Math.ceil(n/ps); return p * ((ps*(ps-1))/2) }
   if (format === 'pool_then_bracket') { const ps = n <= 6 ? 3 : 4; const p = Math.ceil(n/ps); return p * ((ps*(ps-1))/2) + p*2-1 }
   return '—'
+}
+
+// Detects bracket format from the games' pool/round data. Used by BracketVisual
+// so we don't need to query tournaments.bracket_format separately.
+function inferFormat(games) {
+  if (!games?.length) return 'single_elimination'
+  const hasPools = games.some(g => g.pool_name)
+  const hasBracket = games.some(g => g.round && !['Round Robin', 'Pool Play'].includes(g.round))
+  const hasRoundRobin = games.some(g => g.round === 'Round Robin')
+  const hasLoserBracket = games.some(g => g.round && /loser|LB/i.test(g.round))
+
+  if (hasRoundRobin && !hasBracket) return 'round_robin'
+  if (hasLoserBracket) return 'double_elimination'
+  if (hasPools && hasBracket) return 'pool_then_bracket'
+  if (hasPools) return 'pool_play'
+  return 'single_elimination'
 }
