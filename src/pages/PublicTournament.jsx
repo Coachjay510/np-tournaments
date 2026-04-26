@@ -29,6 +29,8 @@ export default function PublicTournament() {
     notes: '',
   })
   const [regSaving, setRegSaving] = useState(false)
+  const [coachTeams, setCoachTeams] = useState([])
+  const [selectedCoachTeam, setSelectedCoachTeam] = useState(null)
   const [regError, setRegError] = useState('')
   const [regSuccess, setRegSuccess] = useState(false)
 
@@ -42,6 +44,18 @@ export default function PublicTournament() {
           contact_name: session.user.user_metadata?.full_name || '',
           contact_email: session.user.email || '',
         }))
+        // Fetch their teams from bt_master_teams via org_users
+        supabase.from('org_users').select('org_id').eq('user_id', session.user.id).limit(1)
+          .then(({ data: orgData }) => {
+            if (orgData?.[0]?.org_id) {
+              supabase.from('bt_master_teams')
+                .select('id, display_name, ranking_division_key, age_group, gender')
+                .eq('organization_id', orgData[0].org_id)
+                .is('merged_into_id', null)
+                .order('display_name')
+                .then(({ data }) => setCoachTeams(data || []))
+            }
+          })
       }
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
@@ -366,6 +380,37 @@ export default function PublicTournament() {
                       <div style={{ fontSize: 11, color: '#4a5568' }}>Your contact info has been pre-filled</div>
                     </div>
                     <button onClick={() => supabase.auth.signOut()} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: '#4a5568', cursor: 'pointer', fontSize: 11 }}>Sign out</button>
+                  </div>
+                )}
+
+                {coachTeams.length > 0 && (
+                  <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, fontWeight: 700 }}>Select Your Team</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {coachTeams.map(t => (
+                        <div key={t.id} onClick={() => {
+                          setSelectedCoachTeam(t.id)
+                          setRegForm(f => ({
+                            ...f,
+                            team_name: t.display_name,
+                            division_key: t.ranking_division_key || f.division_key,
+                            age_group: t.age_group || f.age_group,
+                            gender: t.gender || f.gender,
+                          }))
+                        }} style={{
+                          padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
+                          background: selectedCoachTeam === t.id ? 'rgba(92,184,0,0.1)' : '#0a0f1a',
+                          border: `1px solid ${selectedCoachTeam === t.id ? '#5cb800' : '#1a2030'}`,
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        }}>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#d8e0f0' }}>{t.display_name}</div>
+                            <div style={{ fontSize: 11, color: '#4a5568' }}>{t.ranking_division_key} · {t.gender}</div>
+                          </div>
+                          {selectedCoachTeam === t.id && <span style={{ color: '#5cb800', fontSize: 16 }}>✓</span>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
