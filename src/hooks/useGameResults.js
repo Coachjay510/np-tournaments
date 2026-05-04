@@ -84,6 +84,7 @@ export function useGameResults({
           .select(`
             game_id,
             game_date,
+            event_id,
             ranking_source,
             ranking_division_key,
             home_team_id,
@@ -195,8 +196,9 @@ export function useGameResults({
     })
 
     const normalizedCircuit = (circuitGames || []).map((g) => ({
-      id: `circuit:${g.game_id}:${g.ranking_source}`,
+      id: `circuit:${g.game_id}:${g.ranking_source}:${g.event_id || 'no-event'}`,
       source_type: 'circuit',
+      event_id: g.event_id,
       circuit_label: g.ranking_source || 'Circuit',
       ranking_source: g.ranking_source,
       host: g.ranking_source || null,

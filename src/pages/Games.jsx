@@ -91,6 +91,47 @@ export default function Games() {
     setStatus('all')
   }
 
+
+  async function handleDeleteGame(row) {
+    const confirmed = window.confirm(
+      `Delete this game?
+
+${row.home_team_name} vs ${row.away_team_name}
+${row.date || ''}`
+    )
+
+    if (!confirmed) return
+
+    let error = null
+
+    if (row.source_type === 'tournament') {
+      const scheduledGameId = String(row.id || '').replace(/^sched:/, '')
+
+      const result = await supabase
+        .from('scheduled_games')
+        .delete()
+        .eq('id', scheduledGameId)
+
+      error = result.error
+    } else if (row.source_type === 'circuit') {
+      const result = await supabase
+        .from('bt_games')
+        .delete()
+        .eq('game_id', row.raw.game_id)
+        .eq('event_id', row.raw.event_id)
+        .eq('ranking_source', row.raw.ranking_source)
+
+      error = result.error
+    }
+
+    if (error) {
+      alert(`Delete failed: ${error.message}`)
+      return
+    }
+
+    refresh()
+  }
+
   return (
     <>
       <Topbar
@@ -185,6 +226,7 @@ export default function Games() {
                 rows={pagedRows}
                 adminMode
                 onEditScore={setEditingGame}
+                onDeleteGame={handleDeleteGame}
                 linkTeams
                 linkTournaments
               />

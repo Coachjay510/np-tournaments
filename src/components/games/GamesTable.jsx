@@ -97,6 +97,7 @@ function TeamCell({ id, name, highlight, linkEnabled }) {
  *  - rows: normalized rows from useGameResults
  *  - adminMode: show extra admin columns (status, edit button)
  *  - onEditScore: callback for admin score editing
+ *  - onDeleteGame: callback for admin game deletion
  *  - linkTeams: whether team names should link (useful on np-tournaments)
  *  - linkTournaments: whether tournament cells should link to /t/:slug
  */
@@ -104,6 +105,7 @@ export default function GamesTable({
   rows,
   adminMode = false,
   onEditScore,
+  onDeleteGame,
   linkTeams = false,
   linkTournaments = false,
 }) {
@@ -128,7 +130,7 @@ export default function GamesTable({
             <th style={thStyle}>Away</th>
             <th style={thStyle}>Tournament / Round</th>
             {adminMode && <th style={thStyle}>Status</th>}
-            {adminMode && onEditScore && <th style={thStyle}></th>}
+            {adminMode && (onEditScore || onDeleteGame) && <th style={thStyle}></th>}
           </tr>
         </thead>
         <tbody>
@@ -203,25 +205,45 @@ export default function GamesTable({
                     <StatusPill status={row.status} scored={row.scored} />
                   </td>
                 )}
-                {adminMode && onEditScore && (
+                {adminMode && (onEditScore || onDeleteGame) && (
                   <td style={tdStyle}>
-                    {row.source_type === 'tournament' && (
-                      <button
-                        onClick={() => onEditScore(row)}
-                        style={{
-                          background: 'transparent',
-                          border: '1px solid #1a2030',
-                          color: '#5cb800',
-                          padding: '5px 10px',
-                          borderRadius: 6,
-                          fontSize: 11,
-                          cursor: 'pointer',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {row.scored ? 'Edit' : 'Enter'}
-                      </button>
-                    )}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {onEditScore && row.source_type === 'tournament' && (
+                        <button
+                          onClick={() => onEditScore(row)}
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid #1a2030',
+                            color: '#5cb800',
+                            padding: '5px 10px',
+                            borderRadius: 6,
+                            fontSize: 11,
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {row.scored ? 'Edit' : 'Enter'}
+                        </button>
+                      )}
+
+                      {onDeleteGame && (
+                        <button
+                          onClick={() => onDeleteGame(row)}
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid #3a0a0a',
+                            color: '#e05555',
+                            padding: '5px 10px',
+                            borderRadius: 6,
+                            fontSize: 11,
+                            cursor: 'pointer',
+                            fontWeight: 700,
+                          }}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
                   </td>
                 )}
               </tr>
