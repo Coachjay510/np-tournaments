@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Topbar from '../components/layout/Topbar'
 import { supabase } from '../supabaseClient'
 import { formatCurrency, statusColor } from '../lib/utils'
+import { deleteTournamentWithGames } from '../lib/deleteTournamentWithGames'
 
 const emptyTeamForm = {
   team_id: '',
@@ -453,19 +454,15 @@ export default function TournamentDetail({ director }) {
     setError('')
     setSuccess('')
 
-    const { error } = await supabase
-      .from('tournaments')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
+    try {
+      await deleteTournamentWithGames(id)
+      navigate('/tournaments')
+    } catch (error) {
       console.error(error)
       setError(error.message || 'Failed to delete tournament.')
       setDeleting(false)
       return
     }
-
-    navigate('/tournaments')
   }
 
   async function handleCopyTournament() {
@@ -1355,7 +1352,7 @@ export default function TournamentDetail({ director }) {
       {showDeleteModal && (
         <Modal title="Delete Tournament" onClose={() => setShowDeleteModal(false)}>
           <div style={{ color: '#ffb4b4', marginBottom: 16 }}>
-            This will permanently delete this tournament.
+            This will permanently delete this tournament and clean up its scheduled games, team assignments, staff, invites, and related tournament data.
           </div>
           <div style={modalActions}>
             <button onClick={() => setShowDeleteModal(false)} style={ghostButton}>

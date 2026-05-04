@@ -29,6 +29,7 @@ export function useGameResults({
   const [scheduledGames, setScheduledGames] = useState([])
   const [circuitGames, setCircuitGames] = useState([])
   const [tournamentsById, setTournamentsById] = useState({})
+  const [teamLinkMap, setTeamLinkMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -80,20 +81,28 @@ export function useGameResults({
 
       if (includeCircuit && circuit !== 'tournaments') {
         let q = supabase
-          .from('bt_team_recent_games')
+          .from('bt_games')
           .select(`
+            id,
             game_id,
             game_date,
             event_id,
+            division_id,
+            division_name,
             ranking_source,
             ranking_division_key,
             home_team_id,
             away_team_id,
+            normalized_home_team_id,
+            normalized_away_team_id,
+            normalized_winner_team_id,
             home_team_name,
             away_team_name,
             score_home,
-            score_away
+            score_away,
+            has_result
           `)
+          .eq('has_result', true)
           .order('game_date', { ascending: false })
 
         if (isCircuitSource) q = q.eq('ranking_source', circuit)
@@ -133,8 +142,11 @@ export function useGameResults({
         tournamentMap = Object.fromEntries((tourneys || []).map((t) => [t.id, t]))
       }
 
+      const linkRows = await fetchTeamLinksForCircuitGames(circuitRes.data || [])
+
       setScheduledGames(schedRes.data || [])
       setCircuitGames(circuitRes.data || [])
+      setTeamLinkMap(buildTeamLinkMap(linkRows))
       setTournamentsById(tournamentMap)
     } catch (err) {
       console.error('Error loading game results:', err)
@@ -195,36 +207,47 @@ export function useGameResults({
       }
     })
 
-    const normalizedCircuit = (circuitGames || []).map((g) => ({
-      id: `circuit:${g.game_id}:${g.ranking_source}:${g.event_id || 'no-event'}`,
-      source_type: 'circuit',
-      event_id: g.event_id,
-      circuit_label: g.ranking_source || 'Circuit',
-      ranking_source: g.ranking_source,
-      host: g.ranking_source || null,
-      tournament_id: null,
-      tournament_name: null,
-      tournament_slug: null,
-      date: (g.game_date || '').slice(0, 10) || null,   // "YYYY-MM-DD HH:mm" → "YYYY-MM-DD"
-      time: extractTimeFromTimestamp(g.game_date),
-      division_key: g.ranking_division_key,
-      division_name: g.division_name || null,
-      gender: inferGenderFromKey(g.ranking_division_key),
-      age_group: inferAgeFromKey(g.ranking_division_key),
-      home_team_id: g.home_team_id,
-      away_team_id: g.away_team_id,
-      home_team_name: g.home_team_name || 'TBD',
-      away_team_name: g.away_team_name || 'TBD',
-      home_score: g.score_home,
-      away_score: g.score_away,
-      status: g.score_home != null && g.score_away != null ? 'completed' : 'scheduled',
-      round: null,
-      pool_name: null,
-      venue_name: null,
-      court_name: null,
-      scored: g.score_home != null && g.score_away != null,
-      raw: g,
-    }))
+    const normalizedCircuit = (circuitGames || []).map((g) => {
+      const homeMasterId = resolveMasterTeamId(g, 'home', teamLinkMap)
+      const awayMasterId = resolveMasterTeamId(g, 'away', teamLinkMap)
+
+      return {
+        id: `circuit:${g.game_id}:${g.ranking_source}:${g.event_id || 'event'}`,
+        source_type: 'circuit',
+        db_table: 'bt_games',
+        db_id: g.id,
+        event_id: g.event_id,
+        circuit_label: g.ranking_source || 'Circuit',
+        ranking_source: g.ranking_source,
+        host: g.ranking_source || null,
+        tournament_id: null,
+        tournament_name: null,
+        tournament_slug: null,
+        date: (g.game_date || '').slice(0, 10) || null,   // "YYYY-MM-DD HH:mm" → "YYYY-MM-DD"
+        time: extractTimeFromTimestamp(g.game_date),
+        division_key: g.ranking_division_key,
+        division_name: g.division_name || null,
+        gender: inferGenderFromKey(g.ranking_division_key || g.division_name),
+        age_group: inferAgeFromKey(g.ranking_division_key || g.division_name),
+        home_team_id: g.home_team_id,
+        away_team_id: g.away_team_id,
+        home_team_page_id: homeMasterId,
+        away_team_page_id: awayMasterId,
+        home_team_source_id: g.home_team_id,
+        away_team_source_id: g.away_team_id,
+        home_team_name: g.home_team_name || 'TBD',
+        away_team_name: g.away_team_name || 'TBD',
+        home_score: g.score_home,
+        away_score: g.score_away,
+        status: g.score_home != null && g.score_away != null ? 'completed' : 'scheduled',
+        round: null,
+        pool_name: null,
+        venue_name: null,
+        court_name: null,
+        scored: g.score_home != null && g.score_away != null,
+        raw: g,
+      }
+    })
 
     let combined = [...normalizedScheduled, ...normalizedCircuit]
 
@@ -262,7 +285,7 @@ export function useGameResults({
     })
 
     return combined
-  }, [scheduledGames, circuitGames, tournamentsById, team, divisionKey, gender, host, status])
+  }, [scheduledGames, circuitGames, teamLinkMap, tournamentsById, team, divisionKey, gender, host, status])
 
   // ── Derived option lists for filter dropdowns ────────────────────────────
   const divisionOptions = useMemo(() => {
@@ -308,6 +331,69 @@ export function useGameResults({
       circuit: rows.filter((r) => r.source_type === 'circuit').length,
     },
   }
+}
+
+
+async function fetchTeamLinksForCircuitGames(games) {
+  if (!games || games.length === 0) return []
+
+  const sourceIds = new Set()
+  for (const game of games) {
+    if (game.home_team_id) sourceIds.add(String(game.home_team_id))
+    if (game.away_team_id) sourceIds.add(String(game.away_team_id))
+  }
+
+  if (sourceIds.size === 0) return []
+
+  const ids = [...sourceIds]
+  const chunks = []
+  for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i, i + 200))
+
+  const results = []
+  for (const chunk of chunks) {
+    const { data, error } = await supabase
+      .from('bt_team_links')
+      .select('ranking_source, source_team_id, source_team_name, master_team_id')
+      .in('source_team_id', chunk)
+
+    if (error) {
+      console.warn('Unable to load team links for circuit games:', error.message)
+      continue
+    }
+    results.push(...(data || []))
+  }
+
+  return results
+}
+
+function buildTeamLinkMap(links) {
+  const map = {}
+  for (const link of links || []) {
+    const key = teamLinkKey(link.ranking_source, link.source_team_id)
+    if (key && link.master_team_id) map[key] = Number(link.master_team_id)
+  }
+  return map
+}
+
+function resolveMasterTeamId(game, side, teamLinkMap) {
+  const normalized = side === 'home' ? game.normalized_home_team_id : game.normalized_away_team_id
+  if (normalized) return Number(normalized)
+
+  const sourceId = side === 'home' ? game.home_team_id : game.away_team_id
+  const linked = teamLinkMap[teamLinkKey(game.ranking_source, sourceId)]
+  if (linked) return linked
+
+  // Legacy rows sometimes stored master IDs directly. Bracket Team source IDs are
+  // generally very large, so only fall back to smaller IDs as likely master IDs.
+  const numeric = Number(sourceId)
+  if (Number.isFinite(numeric) && numeric > 0 && numeric < 100000) return numeric
+
+  return null
+}
+
+function teamLinkKey(source, sourceTeamId) {
+  if (!source || sourceTeamId == null) return null
+  return `${source}::${String(sourceTeamId)}`
 }
 
 // ── Helpers for inferring gender/age from circuit division keys ────────────

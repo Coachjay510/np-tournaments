@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
+import { deleteTournamentWithGames } from '../lib/deleteTournamentWithGames'
 
 export function useTournaments(directorId) {
   const [tournaments, setTournaments] = useState([])
@@ -60,19 +61,15 @@ export function useTournaments(directorId) {
     return { data, error }
   }
 
-  async function deleteTournament(id) {
-    const { error } = await supabase
-      .from('tournaments')
-      .delete()
-      .eq('id', id)
-
-    if (!error) {
-      setTournaments((prev) =>
-        prev.filter((t) => t.id !== id)
-      )
+  async function deleteTournament(id, options = {}) {
+    try {
+      await deleteTournamentWithGames(id, options)
+      setTournaments((prev) => prev.filter((t) => t.id !== id))
+      return { error: null }
+    } catch (error) {
+      console.error('Failed to delete tournament:', error)
+      return { error }
     }
-
-    return { error }
   }
 
   return {

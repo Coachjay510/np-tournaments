@@ -162,7 +162,7 @@ export default function GamesTable({
                 </td>
                 <td style={{ ...tdStyle, textAlign: 'right' }}>
                   <TeamCell
-                    id={row.home_team_id}
+                    id={row.home_team_page_id || row.home_team_id}
                     name={row.home_team_name}
                     highlight={homeWon}
                     linkEnabled={linkTeams}
@@ -173,7 +173,7 @@ export default function GamesTable({
                 </td>
                 <td style={tdStyle}>
                   <TeamCell
-                    id={row.away_team_id}
+                    id={row.away_team_page_id || row.away_team_id}
                     name={row.away_team_name}
                     highlight={awayWon}
                     linkEnabled={linkTeams}

@@ -91,22 +91,17 @@ export default function Games() {
     setStatus('all')
   }
 
-
   async function handleDeleteGame(row) {
     const confirmed = window.confirm(
-      `Delete this game?
-
-${row.home_team_name} vs ${row.away_team_name}
-${row.date || ''}`
+      `Delete this game?\n\n${row.home_team_name} vs ${row.away_team_name}\n${row.date || ''}`
     )
 
     if (!confirmed) return
 
-    let error = null
+    let error
 
     if (row.source_type === 'tournament') {
-      const scheduledGameId = String(row.id || '').replace(/^sched:/, '')
-
+      const scheduledGameId = row.id.replace(/^sched:/, '')
       const result = await supabase
         .from('scheduled_games')
         .delete()
@@ -117,9 +112,7 @@ ${row.date || ''}`
       const result = await supabase
         .from('bt_games')
         .delete()
-        .eq('game_id', row.raw.game_id)
-        .eq('event_id', row.raw.event_id)
-        .eq('ranking_source', row.raw.ranking_source)
+        .eq('id', row.db_id || row.raw?.id)
 
       error = result.error
     }
@@ -131,6 +124,7 @@ ${row.date || ''}`
 
     refresh()
   }
+
 
   return (
     <>

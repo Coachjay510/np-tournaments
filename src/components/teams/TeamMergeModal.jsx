@@ -196,18 +196,25 @@ export default function TeamMergeModal({ open, onClose, team, onMerged }) {
         .eq('team_id', Number(sourceMasterId))
       if (rankErr) throw new Error(`bt_team_results_normalized: ${rankErr.message}`)
 
-      // 4. Reassign games to target master (home + away)
+      // 4. Reassign normalized game ownership to the target master.
+      // bt_team_recent_games is a view, so we update the base table: bt_games.
       const { error: homeErr } = await supabase
-        .from('bt_team_recent_games')
-        .update({ home_team_id: targetId })
-        .eq('home_team_id', Number(sourceMasterId))
-      if (homeErr) throw new Error(`bt_team_recent_games (home): ${homeErr.message}`)
+        .from('bt_games')
+        .update({ normalized_home_team_id: targetId })
+        .eq('normalized_home_team_id', Number(sourceMasterId))
+      if (homeErr) throw new Error(`bt_games normalized home: ${homeErr.message}`)
 
       const { error: awayErr } = await supabase
-        .from('bt_team_recent_games')
-        .update({ away_team_id: targetId })
-        .eq('away_team_id', Number(sourceMasterId))
-      if (awayErr) throw new Error(`bt_team_recent_games (away): ${awayErr.message}`)
+        .from('bt_games')
+        .update({ normalized_away_team_id: targetId })
+        .eq('normalized_away_team_id', Number(sourceMasterId))
+      if (awayErr) throw new Error(`bt_games normalized away: ${awayErr.message}`)
+
+      const { error: winnerErr } = await supabase
+        .from('bt_games')
+        .update({ normalized_winner_team_id: targetId })
+        .eq('normalized_winner_team_id', Number(sourceMasterId))
+      if (winnerErr) throw new Error(`bt_games normalized winner: ${winnerErr.message}`)
 
       // 5. Mark old master as merged. This is the canary — if this row doesn't
       // update, the merge didn't really happen as far as the UI is concerned.
