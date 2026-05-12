@@ -57,6 +57,8 @@ export default function Games() {
 
   const [editingGame,   setEditingGame]   = useState(null)
   const [teamDrawerInfo, setTeamDrawerInfo] = useState(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState(null)
 
   const { rows, divisionOptions, circuitOptions, hostOptions, loading, error, refresh, counts } =
     useGameResults({
@@ -91,6 +93,27 @@ export default function Games() {
     setCircuit('all')
     setHost('all')
     setStatus('all')
+  }
+
+  async function handleProcessGames() {
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://np-backend-production.up.railway.app'
+      const res = await fetch(`${BACKEND}/api/import/process-raw`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 200 }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Import failed')
+      setImportResult(data)
+      if (data.gamesInserted > 0) refresh()
+    } catch (err) {
+      setImportResult({ error: err.message })
+    } finally {
+      setImporting(false)
+    }
   }
 
   async function handleDeleteGame(row) {
@@ -133,6 +156,30 @@ export default function Games() {
       <Topbar
         title="Games & Scores"
         actions={
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {importResult && (
+              <span style={{ fontSize: 12, color: importResult.error ? '#e05555' : '#5cb800' }}>
+                {importResult.error
+                  ? importResult.error
+                  : `+${importResult.gamesInserted} games, ${importResult.processed} divs`}
+              </span>
+            )}
+            <button
+              onClick={handleProcessGames}
+              disabled={importing}
+              style={{
+                background: importing ? '#1a2030' : '#1a3a4a',
+                color: importing ? '#4a5568' : '#4a9eff',
+                border: '1px solid #1a3050',
+                padding: '9px 16px',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: importing ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {importing ? 'Processing...' : 'Process New Games'}
+            </button>
           <button
             onClick={refresh}
             style={{
@@ -148,6 +195,7 @@ export default function Games() {
           >
             Refresh
           </button>
+          </div>
         }
       />
 
