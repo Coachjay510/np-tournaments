@@ -74,9 +74,19 @@ function ScoreCell({ row, linkable }) {
   )
 }
 
-function TeamCell({ id, name, highlight, linkEnabled }) {
+function TeamCell({ id, name, highlight, linkEnabled, onClick }) {
   const color = highlight ? '#f0f4ff' : '#c0cce0'
   const weight = highlight ? 700 : 500
+  if (onClick) {
+    return (
+      <button
+        onClick={onClick}
+        style={{ background: 'none', border: 'none', padding: 0, color, fontWeight: weight, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', fontSize: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,0.15)', textUnderlineOffset: 3 }}
+      >
+        {name}
+      </button>
+    )
+  }
   if (linkEnabled && id) {
     return (
       <Link
@@ -108,6 +118,7 @@ export default function GamesTable({
   onDeleteGame,
   linkTeams = false,
   linkTournaments = false,
+  onTeamClick,
 }) {
   if (!rows.length) {
     return (
@@ -165,7 +176,14 @@ export default function GamesTable({
                     id={row.home_team_page_id || row.home_team_id}
                     name={row.home_team_name}
                     highlight={homeWon}
-                    linkEnabled={linkTeams}
+                    linkEnabled={linkTeams && !onTeamClick}
+                    onClick={onTeamClick ? () => onTeamClick({
+                      masterTeamId:       row.home_team_page_id || null,
+                      teamName:           row.home_team_name,
+                      sourceTeamId:       row.home_team_source_id || row.home_team_id || null,
+                      rankingSource:      row.ranking_source || null,
+                      rankingDivisionKey: row.division_key || null,
+                    }) : undefined}
                   />
                 </td>
                 <td style={{ ...tdStyle, textAlign: 'center', whiteSpace: 'nowrap' }}>
@@ -176,7 +194,14 @@ export default function GamesTable({
                     id={row.away_team_page_id || row.away_team_id}
                     name={row.away_team_name}
                     highlight={awayWon}
-                    linkEnabled={linkTeams}
+                    linkEnabled={linkTeams && !onTeamClick}
+                    onClick={onTeamClick ? () => onTeamClick({
+                      masterTeamId:       row.away_team_page_id || null,
+                      teamName:           row.away_team_name,
+                      sourceTeamId:       row.away_team_source_id || row.away_team_id || null,
+                      rankingSource:      row.ranking_source || null,
+                      rankingDivisionKey: row.division_key || null,
+                    }) : undefined}
                   />
                 </td>
                 <td style={tdStyle}>

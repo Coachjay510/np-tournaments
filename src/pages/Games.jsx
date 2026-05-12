@@ -3,6 +3,7 @@ import Topbar from '../components/layout/Topbar'
 import { useGameResults } from '../hooks/useGameResults'
 import GameFilters from '../components/games/GameFilters'
 import GamesTable from '../components/games/GamesTable'
+import TeamQuickViewDrawer from '../components/games/TeamQuickViewDrawer'
 import { supabase } from '../supabaseClient'
 
 const PER_PAGE = 50
@@ -54,7 +55,8 @@ export default function Games() {
   const [status, setStatus] = useState('all')
   const [page, setPage] = useState(1)
 
-  const [editingGame, setEditingGame] = useState(null)
+  const [editingGame,   setEditingGame]   = useState(null)
+  const [teamDrawerInfo, setTeamDrawerInfo] = useState(null)
 
   const { rows, divisionOptions, circuitOptions, hostOptions, loading, error, refresh, counts } =
     useGameResults({
@@ -221,8 +223,8 @@ export default function Games() {
                 adminMode
                 onEditScore={setEditingGame}
                 onDeleteGame={handleDeleteGame}
-                linkTeams
                 linkTournaments
+                onTeamClick={setTeamDrawerInfo}
               />
 
               {totalPages > 1 && (
@@ -271,6 +273,12 @@ export default function Games() {
           }}
         />
       )}
+
+      <TeamQuickViewDrawer
+        info={teamDrawerInfo}
+        onClose={() => setTeamDrawerInfo(null)}
+        onLinked={() => { setTeamDrawerInfo(null); refresh() }}
+      />
     </>
   )
 }

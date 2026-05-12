@@ -192,7 +192,7 @@ export default function OrganizationDetail() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: '#0a0f1a' }}>
-                      {['Team', 'Division', 'Rank', 'Level', 'Wins', 'Losses', 'Points'].map((label) => (
+                      {['Team', 'Division', 'Rank', 'W', 'L', 'GP', 'Points'].map((label) => (
                         <th
                           key={label}
                           style={{
@@ -214,12 +214,12 @@ export default function OrganizationDetail() {
                     {teams.map((team) => (
                       <tr key={team.id} style={{ borderBottom: '1px solid #0e1320' }}>
                         <td style={tableCellStyle}>{team.display_name}</td>
-                        <td style={tableCellStyle}>{team.ranking_division_key}</td>
-                        <td style={tableCellStyle}>{team.ranking?.rank ? `#${team.ranking.rank}` : '—'}</td>
-                        <td style={tableCellStyle}>{team.ranking?.skill_level || '—'}</td>
-                        <td style={{ ...tableCellStyle, color: '#5cb800' }}>{team.ranking?.wins ?? 0}</td>
-                        <td style={{ ...tableCellStyle, color: '#ff9d7a' }}>{team.ranking?.losses ?? 0}</td>
-                        <td style={tableCellStyle}>{team.ranking?.ranking_points ?? 0}</td>
+                        <td style={tableCellStyle}>{team.ranking?.ranking_division_key || team.ranking_division_key || '—'}</td>
+                        <td style={{ ...tableCellStyle, color: '#d4a017', fontWeight: 700 }}>{team.ranking?.rank ? `#${team.ranking.rank}` : '—'}</td>
+                        <td style={{ ...tableCellStyle, color: '#5cb800', fontWeight: 600 }}>{team.ranking?.wins ?? '—'}</td>
+                        <td style={{ ...tableCellStyle, color: '#ff9d7a', fontWeight: 600 }}>{team.ranking?.losses ?? '—'}</td>
+                        <td style={tableCellStyle}>{team.ranking?.games_played ?? '—'}</td>
+                        <td style={tableCellStyle}>{team.ranking?.ranking_points ?? '—'}</td>
                       </tr>
                     ))}
 

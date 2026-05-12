@@ -5,6 +5,7 @@ import Topbar from '../components/layout/Topbar'
 import { supabase } from '../supabaseClient'
 import { formatCurrency, statusColor } from '../lib/utils'
 import { deleteTournamentWithGames } from '../lib/deleteTournamentWithGames'
+import TournamentInvites from '../components/invites/TournamentInvites'
 
 const emptyTeamForm = {
   team_id: '',
@@ -962,6 +963,15 @@ export default function TournamentDetail({ director }) {
             )}
           </div>
         </div>
+
+        {/* ── INVITES ── */}
+        <div style={{ ...panel, marginTop: 0 }}>
+          <div style={panelHeader}>TEAM INVITES</div>
+          <div style={{ padding: '0 0 4px' }}>
+            <TournamentInvites tournament={tournament} director={director} />
+          </div>
+        </div>
+
       </div>
 
       {showAddTeamModal && (

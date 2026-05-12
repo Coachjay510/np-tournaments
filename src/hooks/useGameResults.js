@@ -193,6 +193,8 @@ export function useGameResults({
         age_group: g.division?.age_group || null,
         home_team_id: g.home_team_id,
         away_team_id: g.away_team_id,
+        home_team_page_id: g.home_team_id || null,
+        away_team_page_id: g.away_team_id || null,
         home_team_name: g.home_team_name || 'TBD',
         away_team_name: g.away_team_name || 'TBD',
         home_score: g.home_score,

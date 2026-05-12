@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Topbar from '../components/layout/Topbar'
 import { useTeamsAdmin } from '../hooks/useTeamsAdmin'
 import TeamMergeModal from '../components/teams/TeamMergeModal'
+import BulkMergeModal from '../components/teams/BulkMergeModal'
 import TeamOrgModal from '../components/teams/TeamOrgModal'
 import { supabase } from '../supabaseClient'
 
@@ -58,6 +59,7 @@ export default function Teams() {
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [bulkOrg, setBulkOrg] = useState('')
   const [bulkSaving, setBulkSaving] = useState(false)
+  const [showBulkMerge, setShowBulkMerge] = useState(false)
   const [showAgeUp, setShowAgeUp] = useState(false)
   const [agingUp, setAgingUp] = useState(false)
   const [ageUpPreview, setAgeUpPreview] = useState([])
@@ -365,6 +367,14 @@ export default function Teams() {
                   <button onClick={handleBulkAssignOrg} disabled={!bulkOrg || bulkSaving} style={{ background:'#5cb800', color:'#04060a', border:'none', padding:'6px 14px', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer' }}>
                     {bulkSaving ? 'Saving...' : 'Apply'}
                   </button>
+                  {selectedIds.size >= 2 && (
+                    <button
+                      onClick={() => setShowBulkMerge(true)}
+                      style={{ background: '#d4630a', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Merge Selected ({selectedIds.size})
+                    </button>
+                  )}
                   <button onClick={() => setSelectedIds(new Set())} style={{ background:'transparent', color:'#6b7a99', border:'1px solid #1a2030', padding:'6px 10px', borderRadius:6, fontSize:12, cursor:'pointer' }}>Clear</button>
                 </div>
               )}
@@ -447,6 +457,15 @@ export default function Teams() {
         onClose={() => setMergeTeam(null)}
         onMerged={() => { setMergeTeam(null); refresh() }}
       />
+
+      {showBulkMerge && (
+        <BulkMergeModal
+          selectedIds={selectedIds}
+          teams={teams}
+          onClose={() => setShowBulkMerge(false)}
+          onMerged={() => { setShowBulkMerge(false); setSelectedIds(new Set()); refresh() }}
+        />
+      )}
 
       <TeamOrgModal
         open={!!orgTeam}
