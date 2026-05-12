@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Topbar from '../components/layout/Topbar'
 import { useParams } from 'react-router-dom'
 import { useOrganizationDetail } from '../hooks/useOrganizationDetail'
+import BulkMergeModal from '../components/teams/BulkMergeModal'
 
 function StatCard({ label, value, accent = '#f0f4ff' }) {
   return (
@@ -19,6 +20,23 @@ function StatCard({ label, value, accent = '#f0f4ff' }) {
 export default function OrganizationDetail() {
   const { orgId } = useParams()
   const { organization, teams, loading, saving, error, refresh, saveOrganization } = useOrganizationDetail(orgId)
+
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [showBulkMerge, setShowBulkMerge] = useState(false)
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds(prev =>
+      prev.size === teams.length ? new Set() : new Set(teams.map(t => t.id))
+    )
+  }
 
   const [form, setForm] = useState({
     org_name: '',
@@ -186,12 +204,30 @@ export default function OrganizationDetail() {
             </div>
 
             <div style={panelStyle}>
-              <div style={panelTitle}>Organization Teams</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={panelTitle} >Organization Teams</div>
+                {selectedIds.size >= 2 && (
+                  <button
+                    onClick={() => setShowBulkMerge(true)}
+                    style={{ background: '#d4630a', color: '#fff', border: 'none', padding: '7px 16px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
+                  >
+                    Merge Selected ({selectedIds.size})
+                  </button>
+                )}
+              </div>
 
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: '#0a0f1a' }}>
+                      <th style={{ width: 36, padding: '12px 14px', borderBottom: '1px solid #1a2030' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.size === teams.length && teams.length > 0}
+                          onChange={toggleSelectAll}
+                          style={{ cursor: 'pointer', accentColor: '#5cb800' }}
+                        />
+                      </th>
                       {['Team', 'Division', 'Rank', 'W', 'L', 'GP', 'Points'].map((label) => (
                         <th
                           key={label}
@@ -211,21 +247,35 @@ export default function OrganizationDetail() {
                     </tr>
                   </thead>
                   <tbody>
-                    {teams.map((team) => (
-                      <tr key={team.id} style={{ borderBottom: '1px solid #0e1320' }}>
-                        <td style={tableCellStyle}>{team.display_name}</td>
-                        <td style={tableCellStyle}>{team.ranking?.ranking_division_key || team.ranking_division_key || '—'}</td>
-                        <td style={{ ...tableCellStyle, color: '#d4a017', fontWeight: 700 }}>{team.ranking?.rank ? `#${team.ranking.rank}` : '—'}</td>
-                        <td style={{ ...tableCellStyle, color: '#5cb800', fontWeight: 600 }}>{team.ranking?.wins ?? '—'}</td>
-                        <td style={{ ...tableCellStyle, color: '#ff9d7a', fontWeight: 600 }}>{team.ranking?.losses ?? '—'}</td>
-                        <td style={tableCellStyle}>{team.ranking?.games_played ?? '—'}</td>
-                        <td style={tableCellStyle}>{team.ranking?.ranking_points ?? '—'}</td>
-                      </tr>
-                    ))}
+                    {teams.map((team) => {
+                      const selected = selectedIds.has(team.id)
+                      return (
+                        <tr
+                          key={team.id}
+                          style={{ borderBottom: '1px solid #0e1320', background: selected ? 'rgba(92,184,0,0.04)' : 'transparent' }}
+                        >
+                          <td style={{ padding: '12px 14px' }}>
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleSelect(team.id)}
+                              style={{ cursor: 'pointer', accentColor: '#5cb800' }}
+                            />
+                          </td>
+                          <td style={tableCellStyle}>{team.display_name}</td>
+                          <td style={tableCellStyle}>{team.ranking?.ranking_division_key || team.ranking_division_key || '—'}</td>
+                          <td style={{ ...tableCellStyle, color: '#d4a017', fontWeight: 700 }}>{team.ranking?.rank ? `#${team.ranking.rank}` : '—'}</td>
+                          <td style={{ ...tableCellStyle, color: '#5cb800', fontWeight: 600 }}>{team.ranking?.wins ?? '—'}</td>
+                          <td style={{ ...tableCellStyle, color: '#ff9d7a', fontWeight: 600 }}>{team.ranking?.losses ?? '—'}</td>
+                          <td style={tableCellStyle}>{team.ranking?.games_played ?? '—'}</td>
+                          <td style={tableCellStyle}>{team.ranking?.ranking_points ?? '—'}</td>
+                        </tr>
+                      )
+                    })}
 
                     {!teams.length && (
                       <tr>
-                        <td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#4a5568' }}>
+                        <td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#4a5568' }}>
                           No teams assigned yet.
                         </td>
                       </tr>
@@ -237,6 +287,15 @@ export default function OrganizationDetail() {
           </>
         )}
       </div>
+
+      {showBulkMerge && (
+        <BulkMergeModal
+          selectedIds={selectedIds}
+          teams={teams}
+          onClose={() => setShowBulkMerge(false)}
+          onMerged={() => { setShowBulkMerge(false); setSelectedIds(new Set()); refresh() }}
+        />
+      )}
     </div>
   )
 }
