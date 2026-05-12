@@ -12,10 +12,10 @@ const modal = {
 }
 
 async function mergeInto(sourceId, targetId) {
+  // bt_team_results_normalized is a VIEW derived from bt_games — do not update it directly
   const steps = [
     supabase.from('bt_team_links').update({ master_team_id: targetId }).eq('master_team_id', sourceId),
     supabase.from('tournament_teams').update({ team_id: targetId }).eq('team_id', sourceId),
-    supabase.from('bt_team_results_normalized').update({ team_id: targetId }).eq('team_id', sourceId),
     supabase.from('bt_games').update({ normalized_home_team_id: targetId }).eq('normalized_home_team_id', sourceId),
     supabase.from('bt_games').update({ normalized_away_team_id: targetId }).eq('normalized_away_team_id', sourceId),
     supabase.from('bt_games').update({ normalized_winner_team_id: targetId }).eq('normalized_winner_team_id', sourceId),

@@ -23,6 +23,7 @@ export default function OrganizationDetail() {
 
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [showBulkMerge, setShowBulkMerge] = useState(false)
+  const [teamSearch, setTeamSearch] = useState('')
 
   function toggleSelect(id) {
     setSelectedIds(prev => {
@@ -205,15 +206,23 @@ export default function OrganizationDetail() {
 
             <div style={panelStyle}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={panelTitle} >Organization Teams</div>
-                {selectedIds.size >= 2 && (
-                  <button
-                    onClick={() => setShowBulkMerge(true)}
-                    style={{ background: '#d4630a', color: '#fff', border: 'none', padding: '7px 16px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
-                  >
-                    Merge Selected ({selectedIds.size})
-                  </button>
-                )}
+                <div style={panelTitle}>Organization Teams</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <input
+                    value={teamSearch}
+                    onChange={(e) => setTeamSearch(e.target.value)}
+                    placeholder="Search teams..."
+                    style={{ ...inputStyle, width: 180, padding: '7px 12px', fontSize: 12 }}
+                  />
+                  {selectedIds.size >= 2 && (
+                    <button
+                      onClick={() => setShowBulkMerge(true)}
+                      style={{ background: '#d4630a', color: '#fff', border: 'none', padding: '7px 16px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
+                    >
+                      Merge Selected ({selectedIds.size})
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div style={{ overflowX: 'auto' }}>
@@ -247,7 +256,7 @@ export default function OrganizationDetail() {
                     </tr>
                   </thead>
                   <tbody>
-                    {teams.map((team) => {
+                    {teams.filter(t => !teamSearch || t.display_name?.toLowerCase().includes(teamSearch.toLowerCase())).map((team) => {
                       const selected = selectedIds.has(team.id)
                       return (
                         <tr
@@ -273,10 +282,17 @@ export default function OrganizationDetail() {
                       )
                     })}
 
-                    {!teams.length && (
+                    {teams.length === 0 && (
                       <tr>
                         <td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#4a5568' }}>
                           No teams assigned yet.
+                        </td>
+                      </tr>
+                    )}
+                    {teams.length > 0 && teamSearch && teams.filter(t => t.display_name?.toLowerCase().includes(teamSearch.toLowerCase())).length === 0 && (
+                      <tr>
+                        <td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#4a5568' }}>
+                          No teams match "{teamSearch}".
                         </td>
                       </tr>
                     )}

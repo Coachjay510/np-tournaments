@@ -32,50 +32,33 @@ export function useOrganizationDetail(orgId) {
 
       if (teamError) throw teamError
 
-      const masterIds = (masterTeams || []).map((t) => t.id)
-
-      // Ranking lookup goes through bt_team_links because the rankings view
-      // uses a composite key: "{ranking_source}__{source_team_id}__{division_key}"
-      // not the numeric bt_master_teams.id directly.
+      // Ranking lookup: bt_rankings_next_play_tiered uses "Next Play Sports" team IDs
+      // which don't join to bt_team_links. Match directly by team name + division key.
       let merged = masterTeams || []
 
-      if (masterIds.length) {
-        const { data: links } = await supabase
-          .from('bt_team_links')
-          .select('master_team_id, source_team_id, ranking_source, ranking_division_key')
-          .in('master_team_id', masterIds)
-
-        // The view's master_team_id uses a 2-part composite key when a link exists:
-        // "{numeric_master_team_id}__{ranking_division_key}"
-        const rankingKeys = (links || [])
-          .map((l) => l.master_team_id && l.ranking_division_key
-            ? `${l.master_team_id}__${l.ranking_division_key}`
-            : null)
-          .filter(Boolean)
+      if (masterTeams?.length) {
+        const teamNames = masterTeams.map((t) => t.display_name).filter(Boolean)
 
         let rankings = []
-        if (rankingKeys.length) {
+        if (teamNames.length) {
           const { data } = await supabase
             .from('bt_rankings_next_play_tiered')
-            .select('master_team_id, team_name, rank, wins, losses, ranking_points, games_played, ranking_division_key')
-            .in('master_team_id', rankingKeys)
+            .select('team_name, rank, wins, losses, ranking_points, games_played, ranking_division_key')
+            .in('team_name', teamNames)
           rankings = data || []
         }
 
-        // Build masterId → best ranking map via links
-        const rankingByMasterId = {}
-        for (const link of (links || [])) {
-          const key = `${link.master_team_id}__${link.ranking_division_key}`
-          const ranking = rankings.find((r) => r.master_team_id === key)
-          if (ranking && !rankingByMasterId[link.master_team_id]) {
-            rankingByMasterId[link.master_team_id] = ranking
-          }
-        }
-
-        merged = (masterTeams || []).map((team) => ({
-          ...team,
-          ranking: rankingByMasterId[team.id] || null,
-        }))
+        // Match each master team to the best ranking by name + division key
+        merged = masterTeams.map((team) => {
+          const match = rankings.find(
+            (r) =>
+              r.team_name?.toLowerCase() === team.display_name?.toLowerCase() &&
+              r.ranking_division_key === (team.ranking_division_key || team.ranking?.ranking_division_key)
+          ) || rankings.find(
+            (r) => r.team_name?.toLowerCase() === team.display_name?.toLowerCase()
+          ) || null
+          return { ...team, ranking: match }
+        })
       }
 
       setOrganization(orgData)
