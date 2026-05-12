@@ -67,7 +67,7 @@ export default function Organizations() {
           <StatCard label="Organizations" value={organizations.length || 0} accent="#5cb800" />
           <StatCard label="Ranked Orgs" value={rankedOrgs.length || 0} />
           <StatCard label="Current #1" value={topOrg?.org_name || '—'} accent="#d4a017" />
-          <StatCard label="Top Org Points" value={topOrg?.ranking?.ranking_points || 0} accent="#1e88ff" />
+          <StatCard label="Top Org Pts" value={topOrg?.ranking?.ranking_points ? Number(topOrg.ranking.ranking_points).toLocaleString() : '—'} accent="#1e88ff" />
         </div>
 
         <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 12, overflow: 'hidden' }}>
@@ -93,7 +93,7 @@ export default function Organizations() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: '#0a0f1a' }}>
-                    {['Rank', 'Organization', 'City', 'State', 'Teams', 'Wins', 'Losses', 'Points', 'Actions'].map((label) => (
+                    {['Rank', 'Organization', 'City', 'State', 'Teams', 'W', 'L', 'GP', 'Pts', 'Actions'].map((label) => (
                       <th
                         key={label}
                         style={{
@@ -122,10 +122,11 @@ export default function Organizations() {
                       </td>
                       <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{org.city || '—'}</td>
                       <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{org.state || '—'}</td>
-                      <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{org.ranking?.ranked_teams ?? 0}</td>
-                      <td style={{ padding: '13px 14px', color: '#5cb800' }}>{org.ranking?.wins ?? 0}</td>
-                      <td style={{ padding: '13px 14px', color: '#ff9d7a' }}>{org.ranking?.losses ?? 0}</td>
-                      <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{org.ranking?.ranking_points ?? 0}</td>
+                      <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{org.ranking?.ranked_teams ?? '—'}</td>
+                      <td style={{ padding: '13px 14px', color: '#5cb800', fontWeight: 600 }}>{org.ranking?.wins ?? '—'}</td>
+                      <td style={{ padding: '13px 14px', color: '#ff9d7a', fontWeight: 600 }}>{org.ranking?.losses ?? '—'}</td>
+                      <td style={{ padding: '13px 14px', color: '#c0cce0' }}>{org.ranking?.games_played ?? '—'}</td>
+                      <td style={{ padding: '13px 14px', color: '#d4a017', fontWeight: 700 }}>{org.ranking?.ranking_points ? Number(org.ranking.ranking_points).toLocaleString() : '—'}</td>
                       <td style={{ padding: '13px 14px' }}>
                         <Link
                           to={`/organizations/${org.id}`}
@@ -146,7 +147,7 @@ export default function Organizations() {
                   ))}
                   {!organizations.length && (
                     <tr>
-                      <td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#4a5568' }}>
+                      <td colSpan={10} style={{ padding: 24, textAlign: 'center', color: '#4a5568' }}>
                         No organizations found yet.
                       </td>
                     </tr>
