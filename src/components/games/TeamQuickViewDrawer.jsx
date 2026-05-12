@@ -215,13 +215,18 @@ function UnlinkedTeamContent({ teamName, sourceTeamId, rankingSource, rankingDiv
   )
 
   async function handleLink() {
-    if (!selectedTargetId || !sourceTeamId) return
+    if (!selectedTargetId) return
+    if (!sourceTeamId) {
+      setError({ message: 'No source team ID available for this team — cannot create a link.' })
+      return
+    }
     setSaving(true)
     setError(null)
+    const resolvedSource = rankingSource || 'NP Tournament'
     const { error: e } = await supabase.from('bt_team_links').upsert({
       source_team_id:       String(sourceTeamId),
-      source_team_name:     teamName,
-      ranking_source:       rankingSource || null,
+      source_team_name:     teamName || 'Unknown',
+      ranking_source:       resolvedSource,
       ranking_division_key: rankingDivisionKey || null,
       master_team_id:       Number(selectedTargetId),
     }, { onConflict: 'source_team_id,ranking_source' })
@@ -232,9 +237,10 @@ function UnlinkedTeamContent({ teamName, sourceTeamId, rankingSource, rankingDiv
   }
 
   async function handleCreateAndLink() {
-    if (!newName.trim()) return
+    if (!newName.trim() || !sourceTeamId) return
     setCreating(true)
     setError(null)
+    const resolvedSource = rankingSource || 'NP Tournament'
     const { data: newTeam, error: ce } = await supabase
       .from('bt_master_teams')
       .insert({ display_name: newName.trim(), ranking_division_key: rankingDivisionKey || null })
@@ -243,8 +249,8 @@ function UnlinkedTeamContent({ teamName, sourceTeamId, rankingSource, rankingDiv
     if (ce) { setError(ce); setCreating(false); return }
     const { error: le } = await supabase.from('bt_team_links').insert({
       source_team_id:       String(sourceTeamId),
-      source_team_name:     teamName,
-      ranking_source:       rankingSource || null,
+      source_team_name:     teamName || 'Unknown',
+      ranking_source:       resolvedSource,
       ranking_division_key: rankingDivisionKey || null,
       master_team_id:       newTeam.id,
     })
@@ -321,7 +327,7 @@ function UnlinkedTeamContent({ teamName, sourceTeamId, rankingSource, rankingDiv
         </div>
       </div>
 
-      {error && <div style={{ color: '#ff9d7a', fontSize: 12 }}>{error.message}</div>}
+      {error && <div style={{ color: '#ff9d7a', fontSize: 12, padding: '8px 10px', background: '#1a0a0a', borderRadius: 8 }}>{error.message}</div>}
 
       <button
         onClick={handleLink}
@@ -332,7 +338,7 @@ function UnlinkedTeamContent({ teamName, sourceTeamId, rankingSource, rankingDiv
           cursor: selectedTargetId ? 'pointer' : 'default', width: '100%',
         }}
       >
-        {saving ? 'Saving…' : selectedTargetId ? `Link to Selected Team` : 'Select a master team above'}
+        {saving ? 'Saving…' : selectedTargetId ? 'Link to Selected Team' : 'Select a master team above'}
       </button>
 
       {/* Divider */}
