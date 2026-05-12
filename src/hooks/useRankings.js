@@ -130,6 +130,7 @@ export function useRankings(source = 'Next Play Sports') {
         (rankings || [])
           .map((row) => row.ranking_division_key)
           .filter(Boolean)
+          .filter((key) => !/^\d+$/.test(key)) // exclude raw numeric IDs (BracketTeam division IDs)
       ),
     ]
 

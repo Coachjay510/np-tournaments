@@ -47,7 +47,7 @@ function matchScore(a = '', b = '') {
 }
 
 // ── Linked team panel ──────────────────────────────────────────────────────
-function LinkedTeamContent({ masterTeamId, onClose }) {
+function LinkedTeamContent({ masterTeamId, teamName, sourceTeamId, rankingSource, rankingDivisionKey, onClose, onLinked }) {
   const navigate = useNavigate()
   const { team, games, linkedSources, loading, error } = useTeamDetail(masterTeamId)
 
@@ -58,7 +58,16 @@ function LinkedTeamContent({ masterTeamId, onClose }) {
 
   if (loading) return <div style={{ padding: 32, color: '#4a5568', fontSize: 13 }}>Loading team…</div>
   if (error)   return <div style={{ padding: 32, color: '#e05555', fontSize: 13 }}>Error: {error.message}</div>
-  if (!team)   return <div style={{ padding: 32, color: '#6b7a99', fontSize: 13 }}>Team not found.</div>
+  // ID didn't map to a master team — fall back to the unlinked/link panel
+  if (!team)   return (
+    <UnlinkedTeamContent
+      teamName={teamName}
+      sourceTeamId={sourceTeamId}
+      rankingSource={rankingSource}
+      rankingDivisionKey={rankingDivisionKey}
+      onLinked={onLinked}
+    />
+  )
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -382,7 +391,15 @@ export default function TeamQuickViewDrawer({ info, onClose, onLinked }) {
         </div>
 
         {masterTeamId ? (
-          <LinkedTeamContent masterTeamId={masterTeamId} onClose={onClose} />
+          <LinkedTeamContent
+            masterTeamId={masterTeamId}
+            teamName={teamName}
+            sourceTeamId={sourceTeamId}
+            rankingSource={rankingSource}
+            rankingDivisionKey={rankingDivisionKey}
+            onClose={onClose}
+            onLinked={onLinked}
+          />
         ) : (
           <UnlinkedTeamContent
             teamName={teamName}
