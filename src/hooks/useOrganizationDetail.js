@@ -45,8 +45,12 @@ export function useOrganizationDetail(orgId) {
           .select('master_team_id, source_team_id, ranking_source, ranking_division_key')
           .in('master_team_id', masterIds)
 
+        // The view's master_team_id uses a 2-part composite key when a link exists:
+        // "{numeric_master_team_id}__{ranking_division_key}"
         const rankingKeys = (links || [])
-          .map((l) => `${l.ranking_source}__${l.source_team_id}__${l.ranking_division_key}`)
+          .map((l) => l.master_team_id && l.ranking_division_key
+            ? `${l.master_team_id}__${l.ranking_division_key}`
+            : null)
           .filter(Boolean)
 
         let rankings = []
@@ -61,7 +65,7 @@ export function useOrganizationDetail(orgId) {
         // Build masterId → best ranking map via links
         const rankingByMasterId = {}
         for (const link of (links || [])) {
-          const key = `${link.ranking_source}__${link.source_team_id}__${link.ranking_division_key}`
+          const key = `${link.master_team_id}__${link.ranking_division_key}`
           const ranking = rankings.find((r) => r.master_team_id === key)
           if (ranking && !rankingByMasterId[link.master_team_id]) {
             rankingByMasterId[link.master_team_id] = ranking
