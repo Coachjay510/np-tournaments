@@ -59,6 +59,8 @@ export default function Games() {
   const [teamDrawerInfo, setTeamDrawerInfo] = useState(null)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
+  const [linking, setLinking] = useState(false)
+  const [linkResult, setLinkResult] = useState(null)
 
   const { rows, divisionOptions, circuitOptions, hostOptions, loading, error, refresh, counts } =
     useGameResults({
@@ -116,6 +118,23 @@ export default function Games() {
     }
   }
 
+  async function handleAutoLink() {
+    setLinking(true)
+    setLinkResult(null)
+    try {
+      const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://np-backend-production.up.railway.app'
+      const res = await fetch(`${BACKEND}/api/import/auto-link`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Auto-link failed')
+      setLinkResult(data)
+      if (data.gamesLinked > 0) refresh()
+    } catch (err) {
+      setLinkResult({ error: err.message })
+    } finally {
+      setLinking(false)
+    }
+  }
+
   async function handleDeleteGame(row) {
     const confirmed = window.confirm(
       `Delete this game?\n\n${row.home_team_name} vs ${row.away_team_name}\n${row.date || ''}`
@@ -164,6 +183,29 @@ export default function Games() {
                   : `+${importResult.gamesInserted} games, ${importResult.processed} divs`}
               </span>
             )}
+            {linkResult && (
+              <span style={{ fontSize: 12, color: linkResult.error ? '#e05555' : '#5cb800' }}>
+                {linkResult.error
+                  ? linkResult.error
+                  : `Linked ${linkResult.gamesLinked} games · ${linkResult.unresolved} unresolved`}
+              </span>
+            )}
+            <button
+              onClick={handleAutoLink}
+              disabled={linking}
+              style={{
+                background: linking ? '#1a2030' : '#1a1a0a',
+                color: linking ? '#4a5568' : '#d4a017',
+                border: '1px solid #3a3000',
+                padding: '9px 16px',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: linking ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {linking ? 'Linking...' : 'Auto-Link Teams'}
+            </button>
             <button
               onClick={handleProcessGames}
               disabled={importing}
