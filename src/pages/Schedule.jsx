@@ -632,14 +632,37 @@ export default function Schedule({ director }) {
       ;(masterData || []).forEach(m => { masterMap[Number(m.id)] = m })
     }
 
-    const mergedTeams = (ttRes.data || []).map(tt => ({
-      ...tt,
-      team_name: masterMap[Number(tt.team_id)]?.display_name || '—',
-      org_name: masterMap[Number(tt.team_id)]?.bt_organizations?.org_name || '—',
-      division_key: masterMap[Number(tt.team_id)]?.ranking_division_key || '—',
-      age_group: masterMap[Number(tt.team_id)]?.age_group || '—',
-      gender: masterMap[Number(tt.team_id)]?.gender || '—',
-    }))
+    // Fetch ranking points by team name so seeding actually works
+    const teamNames = Object.values(masterMap).map(m => m.display_name).filter(Boolean)
+    let rankingMap = {}
+    if (teamNames.length) {
+      const { data: rankingData } = await supabase
+        .from('bt_rankings_next_play_tiered')
+        .select('team_name, ranking_division_key, ranking_points, wins, losses')
+        .in('team_name', teamNames)
+      ;(rankingData || []).forEach(r => {
+        const key = r.team_name.toLowerCase()
+        if (!rankingMap[key] || Number(r.ranking_points) > Number(rankingMap[key].ranking_points)) {
+          rankingMap[key] = r
+        }
+      })
+    }
+
+    const mergedTeams = (ttRes.data || []).map(tt => {
+      const master = masterMap[Number(tt.team_id)]
+      const ranking = master ? rankingMap[master.display_name?.toLowerCase()] : null
+      return {
+        ...tt,
+        team_name: master?.display_name || '—',
+        org_name: master?.bt_organizations?.org_name || '—',
+        division_key: master?.ranking_division_key || '—',
+        age_group: master?.age_group || '—',
+        gender: master?.gender || '—',
+        ranking_points: ranking ? Number(ranking.ranking_points) : 0,
+        wins: ranking ? Number(ranking.wins) : 0,
+        losses: ranking ? Number(ranking.losses) : 0,
+      }
+    })
 
     const mergedCourts = (courtsRes.data || []).map(c => ({
       ...c,
@@ -961,6 +984,17 @@ function generateGames({ teams, constraints, existingGames, startDate, startTime
   constraints.forEach(c => { constraintMap[String(c.team_id)] = c })
   const sortedTeams = [...teams].sort((a, b) => (b.ranking_points || 0) - (a.ranking_points || 0))
 
+  // Track last game end time per team for min_rest_minutes
+  const teamLastGameEnd = {}   // team_id → { date, endMins }
+  // Track used time slots per coach group to prevent simultaneous games
+  const coachGroupSlots = {}   // coach_group → Set<"date|time">
+
+  function minsToTime(totalMins) {
+    const hour = Math.floor(totalMins / 60) % 24
+    const min = totalMins % 60
+    return `${String(hour).padStart(2,'0')}:${String(min).padStart(2,'0')}`
+  }
+
   function getDateForDay(preferredDay) {
     if (!preferredDay) return startDate
     const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
@@ -977,32 +1011,74 @@ function generateGames({ teams, constraints, existingGames, startDate, startTime
     const preferredDay = (cA?.has_conflicts && cA.preferred_day) || (cB?.has_conflicts && cB.preferred_day)
     const gameDate = getDateForDay(preferredDay)
     const [h, m] = startTime.split(':').map(Number)
+    const baseMins = h * 60 + m
+    const coachA = cA?.has_conflicts ? cA.shared_coach_group : null
+    const coachB = cB?.has_conflicts ? cB.shared_coach_group : null
+    const restA = cA?.min_rest_minutes || 0
+    const restB = cB?.min_rest_minutes || 0
+    const lastA = teamA?.team_id ? teamLastGameEnd[String(teamA.team_id)] : null
+    const lastB = teamB?.team_id ? teamLastGameEnd[String(teamB.team_id)] : null
+
     let courtIdx = slotIndex % courtsToUse.length
     let slotOffset = Math.floor(slotIndex / courtsToUse.length)
     let attempts = 0
-    while (attempts < 200) {
-      let totalMins = h * 60 + m + slotOffset * gameDuration
-      if (earliest) { const [eh, em] = earliest.split(':').map(Number); if (totalMins < eh * 60 + em) totalMins = eh * 60 + em }
-      const hour = Math.floor(totalMins / 60) % 24
-      const min = totalMins % 60
-      const timeStr = `${String(hour).padStart(2,'0')}:${String(min).padStart(2,'0')}`
-      const key = `${courtsToUse[courtIdx]?.id}|${gameDate}|${timeStr}`
-      if (!usedSlots.has(key)) {
-        usedSlots.add(key)
-        slotIndex++
+
+    while (attempts < 400) {
+      let totalMins = baseMins + slotOffset * gameDuration
+      if (earliest) {
+        const [eh, em] = earliest.split(':').map(Number)
+        if (totalMins < eh * 60 + em) totalMins = eh * 60 + em
+      }
+      const timeStr = minsToTime(totalMins)
+      const courtSlotKey = `${courtsToUse[courtIdx]?.id}|${gameDate}|${timeStr}`
+      const cgKey = `${gameDate}|${timeStr}`
+
+      const courtFree = !usedSlots.has(courtSlotKey)
+      const coachFree =
+        (!coachA || !(coachGroupSlots[coachA]?.has(cgKey))) &&
+        (!coachB || !(coachGroupSlots[coachB]?.has(cgKey)))
+      const restFreeA = !lastA || lastA.date !== gameDate || totalMins >= lastA.endMins + restA
+      const restFreeB = !lastB || lastB.date !== gameDate || totalMins >= lastB.endMins + restB
+
+      if (courtFree && coachFree && restFreeA && restFreeB) {
+        usedSlots.add(courtSlotKey)
+        // Advance slotIndex to the position after the found slot so the next
+        // game starts from the correct court/time rather than drifting back.
+        slotIndex = slotOffset * courtsToUse.length + courtIdx + 1
         return { court_id: courtsToUse[courtIdx]?.id || null, scheduled_date: gameDate, scheduled_time: timeStr, game_duration_mins: gameDuration }
       }
+
       courtIdx = (courtIdx + 1) % courtsToUse.length
       if (courtIdx === 0) slotOffset++
       attempts++
     }
+
     slotIndex++
     return { court_id: courtsToUse[0]?.id || null, scheduled_date: gameDate, scheduled_time: startTime, game_duration_mins: gameDuration }
   }
 
+  function recordSlot(slot, teamA, teamB) {
+    const endMins = (() => { const [h, m] = slot.scheduled_time.split(':').map(Number); return h * 60 + m + slot.game_duration_mins })()
+    if (teamA?.team_id) teamLastGameEnd[String(teamA.team_id)] = { date: slot.scheduled_date, endMins }
+    if (teamB?.team_id) teamLastGameEnd[String(teamB.team_id)] = { date: slot.scheduled_date, endMins }
+    const cgKey = `${slot.scheduled_date}|${slot.scheduled_time}`
+    const cA = constraintMap[String(teamA?.team_id)]
+    const cB = constraintMap[String(teamB?.team_id)]
+    if (cA?.has_conflicts && cA.shared_coach_group) {
+      if (!coachGroupSlots[cA.shared_coach_group]) coachGroupSlots[cA.shared_coach_group] = new Set()
+      coachGroupSlots[cA.shared_coach_group].add(cgKey)
+    }
+    if (cB?.has_conflicts && cB.shared_coach_group) {
+      if (!coachGroupSlots[cB.shared_coach_group]) coachGroupSlots[cB.shared_coach_group] = new Set()
+      coachGroupSlots[cB.shared_coach_group].add(cgKey)
+    }
+  }
+
   function makeGame(a, b, round, roundNum, extra = {}) {
+    const slot = getSlot(a, b)
+    recordSlot(slot, a, b)
     return {
-      ...getSlot(a, b),
+      ...slot,
       home_team_id: String(a?.team_id || ''), away_team_id: String(b?.team_id || ''),
       home_team_name: a?.team_name || 'TBD', away_team_name: b?.team_name || 'TBD',
       round, round_number: roundNum, status: 'scheduled', ...extra,
