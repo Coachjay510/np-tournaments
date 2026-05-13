@@ -183,6 +183,8 @@ export default function GamesTable({
                       sourceTeamId:       row.home_team_source_id || row.home_team_id || null,
                       rankingSource:      row.ranking_source || null,
                       rankingDivisionKey: row.division_key || null,
+                      gameDbId:           row.db_id || null,
+                      teamSide:           'home',
                     }) : undefined}
                   />
                 </td>
@@ -201,6 +203,8 @@ export default function GamesTable({
                       sourceTeamId:       row.away_team_source_id || row.away_team_id || null,
                       rankingSource:      row.ranking_source || null,
                       rankingDivisionKey: row.division_key || null,
+                      gameDbId:           row.db_id || null,
+                      teamSide:           'away',
                     }) : undefined}
                   />
                 </td>

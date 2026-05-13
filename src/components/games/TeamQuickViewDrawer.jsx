@@ -47,7 +47,7 @@ function matchScore(a = '', b = '') {
 }
 
 // ── Linked team panel ──────────────────────────────────────────────────────
-function LinkedTeamContent({ masterTeamId, teamName, sourceTeamId, rankingSource, rankingDivisionKey, onClose, onLinked }) {
+function LinkedTeamContent({ masterTeamId, teamName, sourceTeamId, rankingSource, rankingDivisionKey, gameDbId, teamSide, onClose, onLinked }) {
   const navigate = useNavigate()
   const { team, games, linkedSources, loading, error } = useTeamDetail(masterTeamId)
 
@@ -65,6 +65,8 @@ function LinkedTeamContent({ masterTeamId, teamName, sourceTeamId, rankingSource
       sourceTeamId={sourceTeamId}
       rankingSource={rankingSource}
       rankingDivisionKey={rankingDivisionKey}
+      gameDbId={gameDbId}
+      teamSide={teamSide}
       onLinked={onLinked}
     />
   )
@@ -168,7 +170,7 @@ function LinkedTeamContent({ masterTeamId, teamName, sourceTeamId, rankingSource
 }
 
 // ── Unlinked team panel ────────────────────────────────────────────────────
-function UnlinkedTeamContent({ teamName, sourceTeamId, rankingSource, rankingDivisionKey, onLinked }) {
+function UnlinkedTeamContent({ teamName, sourceTeamId, rankingSource, rankingDivisionKey, gameDbId, teamSide, onLinked }) {
   const [search,           setSearch]           = useState(teamName || '')
   const [searchById,       setSearchById]       = useState('')
   const [targets,          setTargets]          = useState([])
@@ -177,6 +179,8 @@ function UnlinkedTeamContent({ teamName, sourceTeamId, rankingSource, rankingDiv
   const [saving,           setSaving]           = useState(false)
   const [error,            setError]            = useState(null)
   const [success,          setSuccess]          = useState(false)
+  const [linkedMasterId,   setLinkedMasterId]   = useState(null)
+  const [undoing,          setUndoing]          = useState(false)
   const [creatingNew,      setCreatingNew]      = useState(false)
   const [creating,         setCreating]         = useState(false)
   const [newName,          setNewName]          = useState(teamName || '')
@@ -232,33 +236,43 @@ function UnlinkedTeamContent({ teamName, sourceTeamId, rankingSource, rankingDiv
       }, { onConflict: 'source_team_id,ranking_source' })
       setSaving(false)
       if (e) { setError(e); return }
-    } else if (teamName && rankingSource) {
-      // Fallback: no source ID (name-only imports like Covert Hoops)
-      // Update normalized IDs directly on matching bt_games rows
-      const [homeRes, awayRes] = await Promise.all([
-        supabase.from('bt_games')
-          .update({ normalized_home_team_id: masterId })
-          .eq('home_team_name', teamName)
-          .eq('ranking_source', rankingSource)
-          .is('home_team_id', null),
-        supabase.from('bt_games')
-          .update({ normalized_away_team_id: masterId })
-          .eq('away_team_name', teamName)
-          .eq('ranking_source', rankingSource)
-          .is('away_team_id', null),
-      ])
+      setLinkedMasterId({ type: 'link', sourceTeamId, rankingSource: resolvedSource })
+    } else if (gameDbId && teamSide) {
+      // Name-only import (e.g. Covert Hoops): update only this specific game row
+      const col = teamSide === 'home' ? 'normalized_home_team_id' : 'normalized_away_team_id'
+      const { error: e } = await supabase.from('bt_games')
+        .update({ [col]: masterId })
+        .eq('id', gameDbId)
       setSaving(false)
-      if (homeRes.error || awayRes.error) {
-        setError(homeRes.error || awayRes.error)
-        return
-      }
+      if (e) { setError(e); return }
+      setLinkedMasterId({ type: 'game', gameDbId, col, masterId })
     } else {
       setSaving(false)
-      setError({ message: 'Not enough information to link this team (missing name or source).' })
+      setError({ message: 'Not enough information to link this team (missing game ID or source).' })
       return
     }
 
     setSuccess(true)
+    onLinked?.()
+  }
+
+  async function handleUndo() {
+    if (!linkedMasterId) return
+    setUndoing(true)
+    if (linkedMasterId.type === 'link') {
+      await supabase.from('bt_team_links')
+        .delete()
+        .eq('source_team_id', String(linkedMasterId.sourceTeamId))
+        .eq('ranking_source', linkedMasterId.rankingSource)
+    } else if (linkedMasterId.type === 'game') {
+      await supabase.from('bt_games')
+        .update({ [linkedMasterId.col]: null })
+        .eq('id', linkedMasterId.gameDbId)
+    }
+    setUndoing(false)
+    setSuccess(false)
+    setLinkedMasterId(null)
+    setSelectedTargetId('')
     onLinked?.()
   }
 
@@ -285,21 +299,15 @@ function UnlinkedTeamContent({ teamName, sourceTeamId, rankingSource, rankingDiv
       })
       setCreating(false)
       if (le) { setError(le); return }
-    } else if (teamName && rankingSource) {
-      const [homeRes, awayRes] = await Promise.all([
-        supabase.from('bt_games')
-          .update({ normalized_home_team_id: masterId })
-          .eq('home_team_name', teamName)
-          .eq('ranking_source', rankingSource)
-          .is('home_team_id', null),
-        supabase.from('bt_games')
-          .update({ normalized_away_team_id: masterId })
-          .eq('away_team_name', teamName)
-          .eq('ranking_source', rankingSource)
-          .is('away_team_id', null),
-      ])
+      setLinkedMasterId({ type: 'link', sourceTeamId, rankingSource: resolvedSource })
+    } else if (gameDbId && teamSide) {
+      const col = teamSide === 'home' ? 'normalized_home_team_id' : 'normalized_away_team_id'
+      const { error: e } = await supabase.from('bt_games')
+        .update({ [col]: masterId })
+        .eq('id', gameDbId)
       setCreating(false)
-      if (homeRes.error || awayRes.error) { setError(homeRes.error || awayRes.error); return }
+      if (e) { setError(e); return }
+      setLinkedMasterId({ type: 'game', gameDbId, col, masterId })
     } else {
       setCreating(false)
       setError({ message: 'Not enough information to link this team.' })
@@ -312,10 +320,17 @@ function UnlinkedTeamContent({ teamName, sourceTeamId, rankingSource, rankingDiv
 
   if (success) {
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, flexDirection: 'column', gap: 12 }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, flexDirection: 'column', gap: 16 }}>
         <div style={{ fontSize: 32 }}>✅</div>
         <div style={{ color: '#5cb800', fontSize: 16, fontWeight: 700 }}>Team linked!</div>
-        <div style={{ color: '#6b7a99', fontSize: 12 }}>The games table will refresh automatically.</div>
+        <div style={{ color: '#6b7a99', fontSize: 12 }}>The games table has been refreshed.</div>
+        <button
+          onClick={handleUndo}
+          disabled={undoing}
+          style={{ background: 'transparent', border: '1px solid #3a1a0a', color: '#d4630a', padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 8 }}
+        >
+          {undoing ? 'Undoing…' : '↩ Undo this link'}
+        </button>
       </div>
     )
   }
@@ -429,7 +444,7 @@ function UnlinkedTeamContent({ teamName, sourceTeamId, rankingSource, rankingDiv
 export default function TeamQuickViewDrawer({ info, onClose, onLinked }) {
   if (!info) return null
 
-  const { masterTeamId, teamName, sourceTeamId, rankingSource, rankingDivisionKey } = info
+  const { masterTeamId, teamName, sourceTeamId, rankingSource, rankingDivisionKey, gameDbId, teamSide } = info
 
   return (
     <>
@@ -453,6 +468,8 @@ export default function TeamQuickViewDrawer({ info, onClose, onLinked }) {
             sourceTeamId={sourceTeamId}
             rankingSource={rankingSource}
             rankingDivisionKey={rankingDivisionKey}
+            gameDbId={gameDbId}
+            teamSide={teamSide}
             onClose={onClose}
             onLinked={onLinked}
           />
@@ -462,6 +479,8 @@ export default function TeamQuickViewDrawer({ info, onClose, onLinked }) {
             sourceTeamId={sourceTeamId}
             rankingSource={rankingSource}
             rankingDivisionKey={rankingDivisionKey}
+            gameDbId={gameDbId}
+            teamSide={teamSide}
             onLinked={onLinked}
           />
         )}
