@@ -216,46 +216,96 @@ function UnlinkedTeamContent({ teamName, sourceTeamId, rankingSource, rankingDiv
 
   async function handleLink() {
     if (!selectedTargetId) return
-    if (!sourceTeamId) {
-      setError({ message: 'No source team ID available for this team — cannot create a link.' })
-      return
-    }
     setSaving(true)
     setError(null)
-    const resolvedSource = rankingSource || 'NP Tournament'
-    const { error: e } = await supabase.from('bt_team_links').upsert({
-      source_team_id:       String(sourceTeamId),
-      source_team_name:     teamName || 'Unknown',
-      ranking_source:       resolvedSource,
-      ranking_division_key: rankingDivisionKey || null,
-      master_team_id:       Number(selectedTargetId),
-    }, { onConflict: 'source_team_id,ranking_source' })
-    setSaving(false)
-    if (e) { setError(e); return }
+    const masterId = Number(selectedTargetId)
+
+    if (sourceTeamId) {
+      // Normal path: link via bt_team_links by source team ID
+      const resolvedSource = rankingSource || 'NP Tournament'
+      const { error: e } = await supabase.from('bt_team_links').upsert({
+        source_team_id:       String(sourceTeamId),
+        source_team_name:     teamName || 'Unknown',
+        ranking_source:       resolvedSource,
+        ranking_division_key: rankingDivisionKey || null,
+        master_team_id:       masterId,
+      }, { onConflict: 'source_team_id,ranking_source' })
+      setSaving(false)
+      if (e) { setError(e); return }
+    } else if (teamName && rankingSource) {
+      // Fallback: no source ID (name-only imports like Covert Hoops)
+      // Update normalized IDs directly on matching bt_games rows
+      const [homeRes, awayRes] = await Promise.all([
+        supabase.from('bt_games')
+          .update({ normalized_home_team_id: masterId })
+          .eq('home_team_name', teamName)
+          .eq('ranking_source', rankingSource)
+          .is('home_team_id', null),
+        supabase.from('bt_games')
+          .update({ normalized_away_team_id: masterId })
+          .eq('away_team_name', teamName)
+          .eq('ranking_source', rankingSource)
+          .is('away_team_id', null),
+      ])
+      setSaving(false)
+      if (homeRes.error || awayRes.error) {
+        setError(homeRes.error || awayRes.error)
+        return
+      }
+    } else {
+      setSaving(false)
+      setError({ message: 'Not enough information to link this team (missing name or source).' })
+      return
+    }
+
     setSuccess(true)
     onLinked?.()
   }
 
   async function handleCreateAndLink() {
-    if (!newName.trim() || !sourceTeamId) return
+    if (!newName.trim()) return
     setCreating(true)
     setError(null)
-    const resolvedSource = rankingSource || 'NP Tournament'
     const { data: newTeam, error: ce } = await supabase
       .from('bt_master_teams')
       .insert({ display_name: newName.trim(), ranking_division_key: rankingDivisionKey || null })
       .select('id')
       .single()
     if (ce) { setError(ce); setCreating(false); return }
-    const { error: le } = await supabase.from('bt_team_links').insert({
-      source_team_id:       String(sourceTeamId),
-      source_team_name:     teamName || 'Unknown',
-      ranking_source:       resolvedSource,
-      ranking_division_key: rankingDivisionKey || null,
-      master_team_id:       newTeam.id,
-    })
-    setCreating(false)
-    if (le) { setError(le); return }
+    const masterId = newTeam.id
+
+    if (sourceTeamId) {
+      const resolvedSource = rankingSource || 'NP Tournament'
+      const { error: le } = await supabase.from('bt_team_links').insert({
+        source_team_id:       String(sourceTeamId),
+        source_team_name:     teamName || 'Unknown',
+        ranking_source:       resolvedSource,
+        ranking_division_key: rankingDivisionKey || null,
+        master_team_id:       masterId,
+      })
+      setCreating(false)
+      if (le) { setError(le); return }
+    } else if (teamName && rankingSource) {
+      const [homeRes, awayRes] = await Promise.all([
+        supabase.from('bt_games')
+          .update({ normalized_home_team_id: masterId })
+          .eq('home_team_name', teamName)
+          .eq('ranking_source', rankingSource)
+          .is('home_team_id', null),
+        supabase.from('bt_games')
+          .update({ normalized_away_team_id: masterId })
+          .eq('away_team_name', teamName)
+          .eq('ranking_source', rankingSource)
+          .is('away_team_id', null),
+      ])
+      setCreating(false)
+      if (homeRes.error || awayRes.error) { setError(homeRes.error || awayRes.error); return }
+    } else {
+      setCreating(false)
+      setError({ message: 'Not enough information to link this team.' })
+      return
+    }
+
     setSuccess(true)
     onLinked?.()
   }
