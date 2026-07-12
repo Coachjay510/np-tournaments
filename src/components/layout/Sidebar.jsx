@@ -11,6 +11,7 @@ const navItems = [
   { to: '/organizations', icon: '🏢', label: 'Organizations' },
   { to: '/schedule', icon: '📅', label: 'Schedule' },
   { to: '/games', icon: '🏀', label: 'Games & Scores' },
+  { to: '/game-import', icon: '⬆', label: 'Import Games' },
   { to: '/players', icon: '👤', label: 'Players' },
 ]
 
@@ -21,6 +22,7 @@ const reportItems = [
 ]
 
 const toolItems = [
+  { to: '/scoreboard', icon: '📟', label: 'Scoreboard' },
   { to: '/verification', icon: '🪪', label: 'Age Verification' },
   { to: '/ref-portal', icon: '🦓', label: 'Ref Portal' },
   { to: '/announcements', icon: '📢', label: 'Announcements' },
