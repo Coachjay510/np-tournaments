@@ -7,13 +7,15 @@ const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://np-backend-producti
 export default function Staff({ director }) {
   const [staff, setStaff] = useState([])
   const [refs, setRefs] = useState([])
+  const [courts, setCourts] = useState([]) // courts across all active tournaments
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('staff')
   const [showAddStaff, setShowAddStaff] = useState(false)
   const [showAddRef, setShowAddRef] = useState(false)
-  const [staffForm, setStaffForm] = useState({ name: '', email: '', role: 'referee' })
+  const [staffForm, setStaffForm] = useState({ name: '', email: '', role: 'scorekeeper', court_id: '' })
   const [refForm, setRefForm] = useState({ full_name: '', email: '', phone: '' })
   const [saving, setSaving] = useState(false)
+  const [sendingLink, setSendingLink] = useState(null) // staff id being sent
 
   useEffect(() => {
     if (!director?.id) return
@@ -22,12 +24,19 @@ export default function Staff({ director }) {
 
   async function loadAll() {
     setLoading(true)
-    const [staffRes, refsRes] = await Promise.all([
-      supabase.from('tournament_staff').select('*').eq('director_id', director.id).order('created_at', { ascending: false }),
+    const [staffRes, refsRes, courtsRes] = await Promise.all([
+      supabase.from('tournament_staff').select('*, courts(id, name)').eq('director_id', director.id).order('created_at', { ascending: false }),
       supabase.from('refs').select('*').eq('director_id', director.id).order('full_name'),
+      supabase
+        .from('courts')
+        .select('id, name, tournament_id, tournaments!inner(director_id, name, status)')
+        .eq('tournaments.director_id', director.id)
+        .in('tournaments.status', ['draft', 'registration_open', 'in_progress'])
+        .eq('is_active', true),
     ])
     setStaff(staffRes.data || [])
     setRefs(refsRes.data || [])
+    setCourts(courtsRes.data || [])
     setLoading(false)
   }
 
@@ -35,10 +44,18 @@ export default function Staff({ director }) {
     if (!staffForm.name.trim() || !staffForm.email.trim()) return
     setSaving(true)
     const { data } = await supabase.from('tournament_staff').insert({
-      director_id: director.id, name: staffForm.name.trim(),
-      email: staffForm.email.trim(), role: staffForm.role, status: 'invited',
-    }).select().single()
-    if (data) { setStaff(prev => [data, ...prev]); setStaffForm({ name: '', email: '', role: 'referee' }); setShowAddStaff(false) }
+      director_id: director.id,
+      name: staffForm.name.trim(),
+      email: staffForm.email.trim().toLowerCase(),
+      role: staffForm.role,
+      status: 'invited',
+      court_id: staffForm.court_id || null,
+    }).select('*, courts(id, name)').single()
+    if (data) {
+      setStaff(prev => [data, ...prev])
+      setStaffForm({ name: '', email: '', role: 'scorekeeper', court_id: '' })
+      setShowAddStaff(false)
+    }
     setSaving(false)
   }
 
@@ -46,16 +63,43 @@ export default function Staff({ director }) {
     if (!refForm.full_name.trim()) return
     setSaving(true)
     const { data } = await supabase.from('refs').insert({
-      director_id: director.id, full_name: refForm.full_name.trim(),
-      email: refForm.email.trim() || null, phone: refForm.phone.trim() || null, is_active: true,
+      director_id: director.id,
+      full_name: refForm.full_name.trim(),
+      email: refForm.email.trim() || null,
+      phone: refForm.phone.trim() || null,
+      is_active: true,
     }).select().single()
-    if (data) { setRefs(prev => [...prev, data].sort((a,b) => a.full_name.localeCompare(b.full_name))); setRefForm({ full_name: '', email: '', phone: '' }); setShowAddRef(false) }
+    if (data) {
+      setRefs(prev => [...prev, data].sort((a, b) => a.full_name.localeCompare(b.full_name)))
+      setRefForm({ full_name: '', email: '', phone: '' })
+      setShowAddRef(false)
+    }
     setSaving(false)
   }
 
   async function handleRemoveStaff(id) {
     await supabase.from('tournament_staff').delete().eq('id', id)
     setStaff(prev => prev.filter(s => s.id !== id))
+  }
+
+  async function handleSendLoginLink(staffMember) {
+    setSendingLink(staffMember.id)
+    const { error } = await supabase.auth.signInWithOtp({
+      email: staffMember.email,
+      options: { emailRedirectTo: `${window.location.origin}/scoreboard` },
+    })
+    if (error) alert('Error sending link: ' + error.message)
+    else alert(`Login link sent to ${staffMember.email}`)
+    setSendingLink(null)
+  }
+
+  async function handleAssignCourt(staffId, courtId) {
+    await supabase.from('tournament_staff').update({ court_id: courtId || null }).eq('id', staffId)
+    setStaff(prev => prev.map(s => {
+      if (s.id !== staffId) return s
+      const court = courts.find(c => c.id === courtId) || null
+      return { ...s, court_id: courtId || null, courts: court ? { id: court.id, name: court.name } : null }
+    }))
   }
 
   async function handleToggleRef(id, is_active) {
@@ -94,21 +138,16 @@ export default function Staff({ director }) {
 
   async function handleInviteRef(refId) {
     const { data: tournaments } = await supabase
-      .from('tournaments')
-      .select('id, name')
+      .from('tournaments').select('id, name')
       .eq('director_id', director.id)
       .in('status', ['draft', 'registration_open', 'in_progress'])
       .order('start_date')
-    
     if (!tournaments?.length) { alert('No active tournaments found.'); return }
-    
     const options = tournaments.map((t, i) => `${i + 1}. ${t.name}`).join('\n')
     const choice = prompt(`Select tournament to invite ref to:\n\n${options}\n\nEnter number:`)
     if (!choice) return
-    
     const tournament = tournaments[parseInt(choice) - 1]
     if (!tournament) { alert('Invalid selection'); return }
-    
     try {
       const res = await fetch(`${BACKEND}/api/tournaments/invite-ref`, {
         method: 'POST',
@@ -118,9 +157,7 @@ export default function Staff({ director }) {
       const data = await res.json()
       if (data.success) alert(`Invite sent to ref for ${tournament.name}!`)
       else alert('Error: ' + (data.error || 'Failed to send invite'))
-    } catch (err) {
-      alert('Could not reach backend: ' + err.message)
-    }
+    } catch (err) { alert('Could not reach backend: ' + err.message) }
   }
 
   const roleColors = {
@@ -135,26 +172,29 @@ export default function Staff({ director }) {
   const th = { textAlign: 'left', padding: '10px 14px', fontSize: 11, color: '#6b7a99', textTransform: 'uppercase', letterSpacing: '1px', borderBottom: '1px solid #1a2030' }
   const td = { padding: '12px 14px', borderBottom: '1px solid #0e1320' }
 
+  const scorekeepers = staff.filter(s => s.role === 'scorekeeper')
+  const otherStaff = staff.filter(s => s.role !== 'scorekeeper')
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <Topbar title="STAFF & REFS" actions={
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => { setShowAddRef(true) }} style={{ background: '#1a2a4a', color: '#7eb3ff', border: '1px solid #1a3a6a', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={() => setShowAddRef(true)} style={{ background: '#1a2a4a', color: '#7eb3ff', border: '1px solid #1a3a6a', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             + Add Ref
           </button>
-          <button onClick={() => { setShowAddStaff(true) }} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={() => setShowAddStaff(true)} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             + Add Staff
           </button>
         </div>
       } />
 
       <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-        {/* Tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
           {[['staff', `Staff (${staff.length})`], ['refs', `Referees (${refs.length})`]].map(([id, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
               padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              background: activeTab === id ? '#5cb800' : 'transparent', color: activeTab === id ? '#04060a' : '#6b7a99',
+              background: activeTab === id ? '#5cb800' : 'transparent',
+              color: activeTab === id ? '#04060a' : '#6b7a99',
               border: `1px solid ${activeTab === id ? '#5cb800' : '#1a2030'}`,
             }}>{label}</button>
           ))}
@@ -162,34 +202,124 @@ export default function Staff({ director }) {
 
         {loading ? <div style={{ padding: 40, textAlign: 'center', color: '#4a5568' }}>Loading...</div> : (
           <>
-            {/* Staff Tab */}
             {activeTab === 'staff' && (
-              <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 12, overflow: 'hidden' }}>
-                {staff.length === 0 ? (
-                  <div style={{ padding: 40, textAlign: 'center', color: '#4a5568' }}>No staff added yet</div>
-                ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead><tr style={{ background: '#0a0f1a' }}>{['Name','Email','Role','Status',''].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
-                    <tbody>
-                      {staff.map(s => {
-                        const rc = roleColors[s.role] || roleColors.referee
-                        return (
-                          <tr key={s.id}>
-                            <td style={{ ...td, color: '#d8e0f0', fontWeight: 600 }}>{s.name}</td>
-                            <td style={{ ...td, color: '#6b7a99', fontSize: 12 }}>{s.email}</td>
-                            <td style={td}><span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 20, fontWeight: 700, background: rc.bg, color: rc.color, border: `1px solid ${rc.border}`, textTransform: 'uppercase' }}>{s.role}</span></td>
-                            <td style={td}><span style={{ fontSize: 11, color: s.status === 'active' ? '#5cb800' : '#d4a017' }}>{s.status}</span></td>
-                            <td style={td}><button onClick={() => handleRemoveStaff(s.id)} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer' }}>🗑</button></td>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+                {/* Scorekeepers section */}
+                <div>
+                  <div style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+                    Scorekeepers — Court Assignment & Login
+                  </div>
+                  <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 12, overflow: 'hidden' }}>
+                    {scorekeepers.length === 0 ? (
+                      <div style={{ padding: 32, textAlign: 'center', color: '#4a5568' }}>
+                        <div style={{ fontSize: 28, marginBottom: 8 }}>📟</div>
+                        <div style={{ color: '#c0cce0', fontWeight: 600, marginBottom: 6 }}>No scorekeepers yet</div>
+                        <div style={{ fontSize: 13, marginBottom: 16 }}>Add a scorekeeper to assign them a court and send their login link</div>
+                        <button onClick={() => { setStaffForm(f => ({ ...f, role: 'scorekeeper' })); setShowAddStaff(true) }} style={{ background: '#0d1a0a', color: '#5cb800', border: '1px solid #1a3a0a', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                          + Add Scorekeeper
+                        </button>
+                      </div>
+                    ) : (
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#0a0f1a' }}>
+                            {['Name', 'Email', 'Court Assignment', 'Status', 'Scoreboard Access', ''].map(h => (
+                              <th key={h} style={th}>{h}</th>
+                            ))}
                           </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody>
+                          {scorekeepers.map(s => (
+                            <tr key={s.id}>
+                              <td style={{ ...td, color: '#d8e0f0', fontWeight: 600 }}>{s.name}</td>
+                              <td style={{ ...td, color: '#6b7a99', fontSize: 12 }}>{s.email}</td>
+                              <td style={td}>
+                                <select
+                                  value={s.court_id || ''}
+                                  onChange={e => handleAssignCourt(s.id, e.target.value)}
+                                  style={{ ...inp, width: 'auto', minWidth: 140, padding: '6px 10px', fontSize: 12 }}
+                                >
+                                  <option value="">No court</option>
+                                  {courts.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                  ))}
+                                </select>
+                                {courts.length === 0 && (
+                                  <div style={{ fontSize: 11, color: '#4a5568', marginTop: 4 }}>
+                                    Add courts in Schedule
+                                  </div>
+                                )}
+                              </td>
+                              <td style={td}>
+                                <span style={{ fontSize: 11, color: s.accepted_at ? '#5cb800' : '#d4a017' }}>
+                                  {s.accepted_at ? '● Active' : '○ Invited'}
+                                </span>
+                              </td>
+                              <td style={td}>
+                                <button
+                                  onClick={() => handleSendLoginLink(s)}
+                                  disabled={sendingLink === s.id}
+                                  style={{ background: '#0d1a0a', color: '#5cb800', border: '1px solid #1a3a0a', padding: '5px 12px', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}
+                                >
+                                  {sendingLink === s.id ? 'Sending…' : '🔗 Send Login Link'}
+                                </button>
+                              </td>
+                              <td style={td}>
+                                <button onClick={() => handleRemoveStaff(s.id)} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer' }}>🗑</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+
+                {/* Other staff section */}
+                {otherStaff.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+                      Other Staff
+                    </div>
+                    <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 12, overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#0a0f1a' }}>
+                            {['Name', 'Email', 'Role', 'Status', ''].map(h => <th key={h} style={th}>{h}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {otherStaff.map(s => {
+                            const rc = roleColors[s.role] || roleColors.referee
+                            return (
+                              <tr key={s.id}>
+                                <td style={{ ...td, color: '#d8e0f0', fontWeight: 600 }}>{s.name}</td>
+                                <td style={{ ...td, color: '#6b7a99', fontSize: 12 }}>{s.email}</td>
+                                <td style={td}>
+                                  <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 20, fontWeight: 700, background: rc.bg, color: rc.color, border: `1px solid ${rc.border}`, textTransform: 'uppercase' }}>
+                                    {s.role}
+                                  </span>
+                                </td>
+                                <td style={td}>
+                                  <span style={{ fontSize: 11, color: s.accepted_at ? '#5cb800' : '#d4a017' }}>
+                                    {s.accepted_at ? '● Active' : '○ Invited'}
+                                  </span>
+                                </td>
+                                <td style={td}>
+                                  <button onClick={() => handleRemoveStaff(s.id)} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer' }}>🗑</button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
 
-            {/* Refs Tab */}
             {activeTab === 'refs' && (
               <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 12, overflow: 'hidden' }}>
                 {refs.length === 0 ? (
@@ -203,7 +333,11 @@ export default function Staff({ director }) {
                   </div>
                 ) : (
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead><tr style={{ background: '#0a0f1a' }}>{['Name','Email','Phone','Status','Games',''].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                    <thead>
+                      <tr style={{ background: '#0a0f1a' }}>
+                        {['Name', 'Email', 'Phone', 'Status', 'Games', ''].map(h => <th key={h} style={th}>{h}</th>)}
+                      </tr>
+                    </thead>
                     <tbody>
                       {refs.map(r => (
                         <tr key={r.id}>
@@ -223,8 +357,8 @@ export default function Staff({ director }) {
                             <button onClick={() => handleSMSRef(r.id)} style={{ background: '#1a1500', color: '#d4a017', border: '1px solid #3a3000', padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>
                               💬 SMS
                             </button>
+                            <button onClick={() => handleRemoveRef(r.id)} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer', marginLeft: 6 }}>🗑</button>
                           </td>
-                          <td style={td}><button onClick={() => handleRemoveRef(r.id)} style={{ background: 'none', border: 'none', color: '#4a5568', cursor: 'pointer' }}>🗑</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -246,17 +380,43 @@ export default function Staff({ director }) {
               <div><label style={lbl}>Email</label><input type="email" value={staffForm.email} onChange={e => setStaffForm(p => ({ ...p, email: e.target.value }))} style={inp} /></div>
               <div>
                 <label style={lbl}>Role</label>
-                <select value={staffForm.role} onChange={e => setStaffForm(p => ({ ...p, role: e.target.value }))} style={inp}>
-                  <option value="referee">Referee</option>
+                <select value={staffForm.role} onChange={e => setStaffForm(p => ({ ...p, role: e.target.value, court_id: '' }))} style={inp}>
                   <option value="scorekeeper">Scorekeeper</option>
+                  <option value="referee">Referee</option>
                   <option value="coordinator">Coordinator</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
+              {staffForm.role === 'scorekeeper' && (
+                <div>
+                  <label style={lbl}>Court Assignment</label>
+                  <select value={staffForm.court_id} onChange={e => setStaffForm(p => ({ ...p, court_id: e.target.value }))} style={inp}>
+                    <option value="">No court assigned yet</option>
+                    {courts.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {courts.length === 0 && (
+                    <div style={{ fontSize: 11, color: '#4a5568', marginTop: 6 }}>
+                      No courts set up yet — add courts in the Schedule page, then assign here
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+            {staffForm.role === 'scorekeeper' && (
+              <div style={{ marginTop: 16, padding: '12px 14px', background: '#0d1a0a', border: '1px solid #1a3a0a', borderRadius: 8 }}>
+                <div style={{ fontSize: 12, color: '#5cb800', fontWeight: 600, marginBottom: 4 }}>After adding:</div>
+                <div style={{ fontSize: 12, color: '#6b7a99' }}>
+                  Use the "Send Login Link" button on the staff page to email them a one-tap link to the scoreboard. No password needed.
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
               <button onClick={() => setShowAddStaff(false)} style={{ background: 'transparent', color: '#6b7a99', border: '1px solid #1a2030', padding: '9px 16px', borderRadius: 8, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={handleAddStaff} disabled={saving} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>{saving ? 'Adding...' : 'Add Staff'}</button>
+              <button onClick={handleAddStaff} disabled={saving} style={{ background: '#5cb800', color: '#04060a', border: 'none', padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                {saving ? 'Adding...' : 'Add Staff'}
+              </button>
             </div>
           </div>
         </div>
@@ -275,7 +435,9 @@ export default function Staff({ director }) {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
               <button onClick={() => setShowAddRef(false)} style={{ background: 'transparent', color: '#6b7a99', border: '1px solid #1a2030', padding: '9px 16px', borderRadius: 8, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={handleAddRef} disabled={saving} style={{ background: '#1a2a4a', color: '#7eb3ff', border: '1px solid #1a3a6a', padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>{saving ? 'Adding...' : '+ Add Referee'}</button>
+              <button onClick={handleAddRef} disabled={saving} style={{ background: '#1a2a4a', color: '#7eb3ff', border: '1px solid #1a3a6a', padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                {saving ? 'Adding...' : '+ Add Referee'}
+              </button>
             </div>
           </div>
         </div>
