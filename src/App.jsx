@@ -39,7 +39,7 @@ import PublicScoreSubmit from './pages/PublicScoreSubmit'
 import Verification from './pages/Verification'
 import ClaimTeam from './pages/ClaimTeam'
 import Scoreboard from './pages/Scoreboard'
-import GameImport from './pages/GameImport'
+import BracketTeamImport from './pages/BracketTeamImport'
 
 export default function App() {
   const { director, loading } = useDirector()
@@ -116,7 +116,7 @@ export default function App() {
           <Route path="/games" element={<Games director={director} />} />
           <Route path="/players" element={<Players director={director} />} />
           <Route path="/verification" element={<Verification director={director} />} />
-          <Route path="/game-import" element={<GameImport director={director} />} />
+          <Route path="/bt-import" element={<BracketTeamImport director={director} />} />
           <Route path="/ref-portal" element={<RefPortal director={director} />} />
           <Route path="/analytics" element={<Analytics director={director} />} />
           <Route path="/financials" element={<Financials director={director} />} />

@@ -11,7 +11,7 @@ const navItems = [
   { to: '/organizations', icon: '🏢', label: 'Organizations' },
   { to: '/schedule', icon: '📅', label: 'Schedule' },
   { to: '/games', icon: '🏀', label: 'Games & Scores' },
-  { to: '/game-import', icon: '⬆', label: 'Import Games' },
+  { to: '/bt-import', icon: '⬆', label: 'BT Import' },
   { to: '/players', icon: '👤', label: 'Players' },
 ]
 
