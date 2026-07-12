@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Topbar from '../components/layout/Topbar'
 import { useGameResults } from '../hooks/useGameResults'
 import GameFilters from '../components/games/GameFilters'
@@ -62,6 +62,10 @@ export default function Games() {
   const [linking, setLinking] = useState(false)
   const [linkResult, setLinkResult] = useState(null)
 
+  const [pendingSubmissions, setPendingSubmissions] = useState([])
+  const [loadingSubmissions, setLoadingSubmissions] = useState(true)
+  const [reviewingId, setReviewingId] = useState(null)
+
   const { rows, divisionOptions, circuitOptions, hostOptions, loading, error, refresh, counts } =
     useGameResults({
       team,
@@ -74,6 +78,58 @@ export default function Games() {
       status,
       scoredOnly: false, // admin sees everything
     })
+
+  const fetchPending = useCallback(async () => {
+    setLoadingSubmissions(true)
+    const { data } = await supabase
+      .from('score_submissions')
+      .select('*, scheduled_games:game_id(id, home_team_name, away_team_name, game_date, tournament_name, round)')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+    setPendingSubmissions(data || [])
+    setLoadingSubmissions(false)
+  }, [])
+
+  useEffect(() => { fetchPending() }, [fetchPending])
+
+  async function handleApprove(sub) {
+    setReviewingId(sub.id)
+    const winnerId = sub.home_score > sub.away_score
+      ? sub.scheduled_games?.home_team_id
+      : sub.home_score < sub.away_score
+        ? sub.scheduled_games?.away_team_id
+        : null
+
+    await supabase
+      .from('scheduled_games')
+      .update({
+        home_score: sub.home_score,
+        away_score: sub.away_score,
+        winner_team_id: winnerId || undefined,
+        status: 'completed',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', sub.game_id)
+
+    await supabase
+      .from('score_submissions')
+      .update({ status: 'approved', reviewed_at: new Date().toISOString() })
+      .eq('id', sub.id)
+
+    setReviewingId(null)
+    fetchPending()
+    refresh()
+  }
+
+  async function handleReject(sub) {
+    setReviewingId(sub.id)
+    await supabase
+      .from('score_submissions')
+      .update({ status: 'rejected', reviewed_at: new Date().toISOString() })
+      .eq('id', sub.id)
+    setReviewingId(null)
+    fetchPending()
+  }
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -255,6 +311,101 @@ export default function Games() {
           <StatCard label="NP Tournament" value={counts.tournament} accent="#d4a017" />
           <StatCard label="Circuit History" value={counts.circuit} accent="#4a9eff" />
         </div>
+
+        {/* Pending score submissions */}
+        {(loadingSubmissions || pendingSubmissions.length > 0) && (
+          <div style={{ background: '#080c12', border: '1px solid #3a2800', borderRadius: 12, overflow: 'hidden', marginBottom: 20 }}>
+            <div style={{ padding: '12px 18px', borderBottom: '1px solid #3a2800', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#d4a017', flexShrink: 0 }} />
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#d4a017', letterSpacing: '0.3px' }}>
+                PENDING SCORE SUBMISSIONS
+              </div>
+              <div style={{ marginLeft: 'auto', fontSize: 11, color: '#6b7a99' }}>
+                {pendingSubmissions.length} awaiting review
+              </div>
+            </div>
+
+            {loadingSubmissions ? (
+              <div style={{ padding: 20, color: '#4a5568', fontSize: 13, textAlign: 'center' }}>Loading…</div>
+            ) : (
+              <div>
+                {pendingSubmissions.map(sub => {
+                  const game = sub.scheduled_games
+                  const busy = reviewingId === sub.id
+                  return (
+                    <div
+                      key={sub.id}
+                      style={{ padding: '14px 18px', borderBottom: '1px solid #1a2030', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}
+                    >
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        {game?.tournament_name && (
+                          <div style={{ fontSize: 10, color: '#d4a017', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>
+                            {game.tournament_name}{game.round ? ` · ${game.round}` : ''}
+                          </div>
+                        )}
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#f0f4ff' }}>
+                          {game?.home_team_name ?? '—'} vs {game?.away_team_name ?? '—'}
+                        </div>
+                        {game?.game_date && (
+                          <div style={{ fontSize: 11, color: '#6b7a99', marginTop: 2 }}>
+                            {new Date(game.game_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontFamily: 'Anton, sans-serif', fontSize: 22, color: '#5cb800', letterSpacing: '1px' }}>
+                          {sub.home_score} – {sub.away_score}
+                        </div>
+                        {sub.submitted_by_email && (
+                          <div style={{ fontSize: 10, color: '#4a5568', marginTop: 2 }}>from {sub.submitted_by_email}</div>
+                        )}
+                        {sub.notes && (
+                          <div style={{ fontSize: 11, color: '#8a9ab8', fontStyle: 'italic', marginTop: 2 }}>"{sub.notes}"</div>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        <button
+                          onClick={() => handleApprove(sub)}
+                          disabled={busy}
+                          style={{
+                            background: busy ? '#1a2030' : '#0d1a0a',
+                            color: busy ? '#4a5568' : '#5cb800',
+                            border: '1px solid #1a3a0a',
+                            padding: '8px 14px',
+                            borderRadius: 8,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: busy ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {busy ? '…' : '✓ Approve'}
+                        </button>
+                        <button
+                          onClick={() => handleReject(sub)}
+                          disabled={busy}
+                          style={{
+                            background: 'transparent',
+                            color: busy ? '#4a5568' : '#e05555',
+                            border: '1px solid #3a1010',
+                            padding: '8px 14px',
+                            borderRadius: 8,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: busy ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         <div
           style={{

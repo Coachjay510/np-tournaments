@@ -12,17 +12,28 @@ export default function PublicTeam() {
   const [followed, setFollowed] = useState(false)
   const [followError, setFollowError] = useState('')
 
+  const [players, setPlayers] = useState([])
+
   useEffect(() => {
     async function load() {
-      const { data: teamData } = await supabase.from('bt_master_teams')
-        .select('*, bt_organizations(org_name)').eq('id', teamId).single()
+      const [
+        { data: teamData },
+        { data: gamesData },
+        { data: rosterData },
+      ] = await Promise.all([
+        supabase.from('bt_master_teams').select('*, bt_organizations(org_name)').eq('id', teamId).single(),
+        supabase.from('bt_team_recent_games').select('*').or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`).order('game_date', { ascending: false }).limit(20),
+        supabase.from('team_players').select('players(id, first_name, last_name, jersey_number, position, grad_year, height_inches, verification_status)').eq('np_team_id', teamId),
+      ])
       if (!teamData) { setLoading(false); return }
       setTeam(teamData)
-
-      const { data: gamesData } = await supabase.from('bt_team_recent_games')
-        .select('*').or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`)
-        .order('game_date', { ascending: false }).limit(20)
       setGames(gamesData || [])
+      setPlayers(
+        (rosterData || [])
+          .filter(r => r.players)
+          .map(r => r.players)
+          .sort((a, b) => (a.jersey_number ?? 99) - (b.jersey_number ?? 99))
+      )
       setLoading(false)
     }
     load()
@@ -80,6 +91,41 @@ export default function PublicTeam() {
             ))}
           </div>
         </div>
+
+        {/* Roster */}
+        {players.length > 0 && (
+          <div style={{ background: '#080c12', border: '1px solid #1a2030', borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
+            <div style={{ padding: '12px 18px', borderBottom: '1px solid #1a2030', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#c0cce0' }}>ROSTER</span>
+              <span style={{ fontSize: 11, color: '#4a5568' }}>{players.length} players</span>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#0a0f1a' }}>
+                  {['#', 'Name', 'Pos', 'Class', 'Ht', ''].map(h => (
+                    <th key={h} style={{ textAlign: 'left', padding: '8px 14px', fontSize: 11, color: '#6b7a99', textTransform: 'uppercase', letterSpacing: '1px', borderBottom: '1px solid #1a2030' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {players.map(p => (
+                  <tr key={p.id} style={{ borderBottom: '1px solid #0e1320' }}>
+                    <td style={{ padding: '10px 14px', color: '#5cb800', fontWeight: 700, width: 36, fontFamily: 'Anton, sans-serif', fontSize: 15 }}>{p.jersey_number ?? '—'}</td>
+                    <td style={{ padding: '10px 14px', fontWeight: 600, color: '#f0f4ff', fontSize: 13 }}>{p.first_name} {p.last_name}</td>
+                    <td style={{ padding: '10px 14px', color: '#c0cce0', fontSize: 13 }}>{p.position || '—'}</td>
+                    <td style={{ padding: '10px 14px', color: '#c0cce0', fontSize: 13 }}>{p.grad_year ? `'${String(p.grad_year).slice(-2)}` : '—'}</td>
+                    <td style={{ padding: '10px 14px', color: '#c0cce0', fontSize: 13 }}>{p.height_inches ? `${Math.floor(p.height_inches / 12)}'${p.height_inches % 12}"` : '—'}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                      {p.verification_status === 'verified' && (
+                        <span title="Age verified" style={{ fontSize: 11, color: '#5cb800' }}>✓</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
           {/* Recent games */}

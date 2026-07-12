@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import TeamClaimSearch from '../components/TeamClaimSearch'
 
 const PLANS = [
   {
@@ -142,6 +143,11 @@ export default function OnboardingWizard({ director }) {
             <div>
               <label style={lbl}>Organization Name</label>
               <input value={orgName} onChange={e => setOrgName(e.target.value)} style={inp} placeholder="Basketball Circuit, Delta Dubs AAU..." />
+            </div>
+            <div style={{ borderTop: '1px solid #1a2030', paddingTop: 16 }}>
+              <div style={{ fontSize: 12, color: '#8a9ab8', fontWeight: 600, marginBottom: 4 }}>Link your teams (optional)</div>
+              <div style={{ fontSize: 11, color: '#4a5568', marginBottom: 12 }}>Search the NP database to connect your existing teams — prevents duplicates.</div>
+              <TeamClaimSearch userEmail={director?.email} />
             </div>
             {selectedPlan.action === 'email' && (
               <div>

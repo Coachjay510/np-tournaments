@@ -33,6 +33,11 @@ import AuthCallback from './pages/AuthCallback'
 import RefResponse from './pages/RefResponse'
 import VenueDetail from './pages/VenueDetail'
 import InvitePage from './pages/InvitePage'
+import Players from './pages/Players'
+import PublicPlayer from './pages/PublicPlayer'
+import PublicScoreSubmit from './pages/PublicScoreSubmit'
+import Verification from './pages/Verification'
+import ClaimTeam from './pages/ClaimTeam'
 
 export default function App() {
   const { director, loading } = useDirector()
@@ -63,6 +68,9 @@ export default function App() {
         <Route path="/t/:slug/bracket" element={<PublicBracket />} />
         <Route path="/t/:slug" element={<PublicTournament />} />
         <Route path="/team/:teamId" element={<PublicTeam />} />
+        <Route path="/player/:id" element={<PublicPlayer />} />
+        <Route path="/submit-score/:gameId" element={<PublicScoreSubmit />} />
+        <Route path="/claim-team" element={<ClaimTeam />} />
         <Route path="/demo" element={<DemoApp />} />
         <Route path="/landing" element={<TournamentLanding />} />
         
@@ -103,6 +111,8 @@ export default function App() {
           />
           <Route path="/schedule" element={<Schedule director={director} />} />
           <Route path="/games" element={<Games director={director} />} />
+          <Route path="/players" element={<Players director={director} />} />
+          <Route path="/verification" element={<Verification director={director} />} />
           <Route path="/ref-portal" element={<RefPortal director={director} />} />
           <Route path="/analytics" element={<Analytics director={director} />} />
           <Route path="/financials" element={<Financials director={director} />} />
