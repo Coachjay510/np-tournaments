@@ -89,7 +89,9 @@ export default function Scoreboard() {
 
   async function loadStaffRecord(userEmail) {
     setStaffLoading(true)
-    const { data } = await supabase
+
+    // Check tournament_staff first (scorekeepers, coordinators, admins)
+    const { data: staff } = await supabase
       .from('tournament_staff')
       .select('*, courts(id, name)')
       .eq('email', userEmail)
@@ -97,9 +99,31 @@ export default function Scoreboard() {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
-    setStaffRecord(data)
+
+    if (staff) {
+      setStaffRecord(staff)
+      setStaffLoading(false)
+      loadGames(staff)
+      return
+    }
+
+    // Fall back: check if they're a director (sees all games, no court filter)
+    const { data: director } = await supabase
+      .from('directors')
+      .select('id, display_name, email')
+      .eq('email', userEmail)
+      .maybeSingle()
+
+    if (director) {
+      const rec = { id: director.id, name: director.display_name, email: director.email, role: 'director', court_id: null, courts: null }
+      setStaffRecord(rec)
+      setStaffLoading(false)
+      loadGames(rec)
+      return
+    }
+
+    setStaffRecord(null)
     setStaffLoading(false)
-    if (data) loadGames(data)
   }
 
   async function loadGames(staff) {
@@ -505,9 +529,13 @@ export default function Scoreboard() {
       <div style={{ padding: '14px 20px', borderBottom: '1px solid #1a2030', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontFamily: 'Anton, sans-serif', fontSize: 18, color: '#5cb800', letterSpacing: 1 }}>NP SCOREBOARD</div>
-          {courtName && (
+          {courtName ? (
             <div style={{ fontSize: 11, color: '#d4a017', textTransform: 'uppercase', letterSpacing: '1px', marginTop: 2 }}>
               {courtName}
+            </div>
+          ) : staffRecord?.role === 'director' && (
+            <div style={{ fontSize: 11, color: '#4a9eff', textTransform: 'uppercase', letterSpacing: '1px', marginTop: 2 }}>
+              Director · All Games
             </div>
           )}
         </div>
