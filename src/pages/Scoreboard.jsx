@@ -1194,11 +1194,11 @@ export default function Scoreboard() {
     if (!q.trim()) { setTeamSuggestions([]); return }
     teamSearchTimer.current = setTimeout(async () => {
       const { data } = await supabase
-        .from('teams')
-        .select('id, name')
-        .ilike('name', `%${q.trim()}%`)
+        .from('bt_master_teams')
+        .select('id, display_name')
+        .ilike('display_name', `%${q.trim()}%`)
         .limit(8)
-      setTeamSuggestions(data || [])
+      setTeamSuggestions((data || []).map(t => ({ id: t.id, name: t.display_name })))
     }, 250)
   }
 
