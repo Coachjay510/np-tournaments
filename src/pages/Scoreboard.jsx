@@ -272,7 +272,7 @@ function PlayWizard({ config, homeScore, awayScore, period, onCommit, onCancel }
       <>
         <WizardStepLabel title="WHO SCORED?" step={1} total={2} />
         <PlayerGrid players={myRoster} onSelect={p => { setScorer(p); setStep(1) }} />
-        <SkipTracking onSkip={() => onCommit([], homeScore + isScorePT, awayScore)} />
+        <SkipTracking onSkip={() => onCommit([], team === 'home' ? homeScore + isScorePT : homeScore, team === 'away' ? awayScore + isScorePT : awayScore)} />
       </>
     )
     if (step === 1) return (
@@ -566,6 +566,16 @@ function bigBtnStyle(bg, color) {
   }
 }
 
+function exportCSV(rows, filename) {
+  const header = Object.keys(rows[0]).join(',')
+  const body = rows.map(r => Object.values(r).map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob([header + '\n' + body], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  URL.revokeObjectURL(url)
+}
+
 // ── Box Score ─────────────────────────────────────────────────────────────────
 function BoxScore({ plays, homeRoster, awayRoster, homeTeamName, awayTeamName }) {
   function TeamTable({ roster, teamName }) {
@@ -642,14 +652,80 @@ function BoxScore({ plays, homeRoster, awayRoster, homeTeamName, awayTeamName })
     )
   }
 
+  function handleExportBoxScore() {
+    const allRoster = [
+      ...homeRoster.map(p => ({ team: homeTeamName, ...computeStats(plays, p.id), player: p.player_name, jersey: p.jersey_number || '' })),
+      ...awayRoster.map(p => ({ team: awayTeamName, ...computeStats(plays, p.id), player: p.player_name, jersey: p.jersey_number || '' })),
+    ]
+    exportCSV(allRoster.map(({ team, player, jersey, pts, reb, ast, stl, blk, to, fgm, fga, fg3m, fg3a, ftm, fta }) => ({ Team: team, '#': jersey, Player: player, PTS: pts, REB: reb, AST: ast, STL: stl, BLK: blk, TO: to, FGM: fgm, FGA: fga, '3PM': fg3m, '3PA': fg3a, FTM: ftm, FTA: fta })), `boxscore_${homeTeamName}_vs_${awayTeamName}.csv`)
+  }
+
   if (homeRoster.length === 0 && awayRoster.length === 0) {
-    return <div style={{ color: '#4a5568', fontSize: 13, textAlign: 'center', padding: 20 }}>No roster data. Add players in Roster Setup.</div>
+    return <div style={{ color: '#4a5568', fontSize: 13, textAlign: 'center', padding: 20 }}>No roster data. Add players to see box score.</div>
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={handleExportBoxScore} style={{ background: '#0e1320', border: '1px solid #1a2030', color: '#5cb800', borderRadius: 8, padding: '6px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'Anton, sans-serif', letterSpacing: '0.5px' }}>
+          ↓ Export CSV
+        </button>
+      </div>
       <TeamTable roster={homeRoster} teamName={homeTeamName} />
       <TeamTable roster={awayRoster} teamName={awayTeamName} />
+    </div>
+  )
+}
+
+// ── Play Log ──────────────────────────────────────────────────────────────────
+function PlayLog({ plays, homeTeamName, awayTeamName, onUndo }) {
+  const [expanded, setExpanded] = useState(false)
+  const recent = [...plays].reverse().slice(0, expanded ? plays.length : 5)
+
+  const playDesc = (p) => {
+    const who = p.player_name || 'Unknown'
+    const team = p.team === 'home' ? homeTeamName : awayTeamName
+    if (p.play_type === 'fg2_make') return `${who} (${team}) — 2PT MADE · ${p.assist_player_name ? `Assist: ${p.assist_player_name}` : 'No assist'}`
+    if (p.play_type === 'fg3_make') return `${who} (${team}) — 3PT MADE · ${p.assist_player_name ? `Assist: ${p.assist_player_name}` : 'No assist'}`
+    if (p.play_type === 'fg2_miss') return `${who} (${team}) — 2PT MISSED · Reb: ${p.rebound_player_name || (p.rebound_team ? (p.rebound_team === 'home' ? homeTeamName : awayTeamName) : '—')}`
+    if (p.play_type === 'fg3_miss') return `${who} (${team}) — 3PT MISSED · Reb: ${p.rebound_player_name || (p.rebound_team ? (p.rebound_team === 'home' ? homeTeamName : awayTeamName) : '—')}`
+    if (p.play_type === 'ft_make') return `${who} (${team}) — FT MADE (${p.ft_number}/${p.ft_total})`
+    if (p.play_type === 'ft_miss') return `${who} (${team}) — FT MISSED (${p.ft_number}/${p.ft_total})`
+    if (p.play_type === 'turnover') return `${who} (${team}) — TURNOVER`
+    if (p.play_type === 'steal') return `${who} (${team}) — STEAL`
+    if (p.play_type === 'block') return `${who} (${team}) — BLOCK · Reb: ${p.rebound_player_name || '—'}`
+    return `${p.play_type} · ${team}`
+  }
+
+  const scoreLabel = (p) => {
+    if (p.home_score_after == null) return ''
+    return `${p.home_score_after}–${p.away_score_after}`
+  }
+
+  const isScorePlay = (p) => ['fg2_make', 'fg3_make', 'ft_make'].includes(p.play_type)
+
+  return (
+    <div style={{ background: '#07090f', border: '1px solid #1a2030', borderRadius: 10, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', gap: 8 }}>
+        <button onClick={() => setExpanded(v => !v)} style={{ flex: 1, background: 'none', border: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+          <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 11, color: '#4a9eff', letterSpacing: 1 }}>PLAY HISTORY ({plays.length})</span>
+          <span style={{ fontSize: 11, color: '#4a5568' }}>{expanded ? '▲' : '▼'}</span>
+        </button>
+        <button onClick={() => {
+          exportCSV(plays.map(p => ({ Q: p.period, Type: p.play_type, Team: p.team, Player: p.player_name || '', Assist: p.assist_player_name || '', Reb: p.rebound_player_name || '', RebTeam: p.rebound_team || '', Home: p.home_score_after ?? '', Away: p.away_score_after ?? '' })), `plays_${Date.now()}.csv`)
+        }} style={{ background: 'none', border: 'none', color: '#4a5568', fontSize: 11, cursor: 'pointer', padding: '2px 6px' }}>↓ CSV</button>
+      </div>
+      <div style={{ maxHeight: expanded ? 320 : 160, overflowY: 'auto' }}>
+        {recent.map((p) => (
+          <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 14px', borderTop: '1px solid #1a2030', gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, color: isScorePlay(p) ? '#5cb800' : '#8a9ab8', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{playDesc(p)}</div>
+              <div style={{ fontSize: 10, color: '#2d3748', marginTop: 1 }}>Q{p.period} · {scoreLabel(p)}</div>
+            </div>
+            <button onClick={() => onUndo(p)} style={{ background: 'none', border: 'none', color: '#3a4a5a', fontSize: 11, cursor: 'pointer', padding: '2px 6px', flexShrink: 0, borderRadius: 4 }}>↩</button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -889,51 +965,60 @@ function AllCourtsView({ onSelectGame }) {
 }
 
 // ── GameCard ──────────────────────────────────────────────────────────────────
-function GameCard({ game, onSelect, highlight = false, savedGames = [] }) {
+function GameCard({ game, onSelect, onDelete, highlight = false, savedGames = [] }) {
   const isSaved = savedGames.includes(game.id)
   return (
-    <button
-      onClick={() => onSelect(game)}
-      style={{
-        background: highlight ? '#080f04' : '#080c12',
-        border: `1px solid ${highlight ? '#1e3a0a' : '#1a2030'}`,
-        borderRadius: 12, padding: '14px 16px', cursor: 'pointer',
-        textAlign: 'left', width: '100%',
-        WebkitTapHighlightColor: 'transparent',
-      }}
-      onMouseEnter={e => (e.currentTarget.style.borderColor = highlight ? '#3a6014' : '#2a4010')}
-      onMouseLeave={e => (e.currentTarget.style.borderColor = highlight ? '#1e3a0a' : '#1a2030')}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {(game.round || game.pool_name) && (
-            <div style={{ fontSize: 10, color: '#d4a017', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-              {[game.round, game.pool_name].filter(Boolean).join(' · ')}
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => onSelect(game)}
+        style={{
+          background: highlight ? '#080f04' : '#080c12',
+          border: `1px solid ${highlight ? '#1e3a0a' : '#1a2030'}`,
+          borderRadius: 12, padding: '14px 16px', cursor: 'pointer',
+          textAlign: 'left', width: '100%',
+          WebkitTapHighlightColor: 'transparent',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.borderColor = highlight ? '#3a6014' : '#2a4010')}
+        onMouseLeave={e => (e.currentTarget.style.borderColor = highlight ? '#1e3a0a' : '#1a2030')}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {(game.round || game.pool_name) && (
+              <div style={{ fontSize: 10, color: '#d4a017', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+                {[game.round, game.pool_name].filter(Boolean).join(' · ')}
+              </div>
+            )}
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#f0f4ff' }}>{game.home_team_name}</div>
+            <div style={{ fontSize: 11, color: '#6b7a99', margin: '1px 0' }}>vs</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#f0f4ff' }}>{game.away_team_name}</div>
+            <div style={{ fontSize: 10, color: '#4a5568', marginTop: 4 }}>
+              {fmtDate(game.scheduled_date)} · #{game.id?.slice(0, 8)}
             </div>
-          )}
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#f0f4ff' }}>{game.home_team_name}</div>
-          <div style={{ fontSize: 11, color: '#6b7a99', margin: '1px 0' }}>vs</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#f0f4ff' }}>{game.away_team_name}</div>
-          <div style={{ fontSize: 10, color: '#4a5568', marginTop: 4 }}>
-            {fmtDate(game.scheduled_date)} · #{game.id?.slice(0, 8)}
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 10 }}>
+            {game.scheduled_time && (
+              <div style={{ fontSize: 12, color: '#8a9ab8' }}>{game.scheduled_time.slice(0, 5)}</div>
+            )}
+            {(game.home_score != null || game.away_score != null) && (
+              <div style={{ fontFamily: 'Anton, sans-serif', fontSize: 17, color: '#5cb800', marginTop: 4 }}>
+                {game.home_score ?? 0} – {game.away_score ?? 0}
+              </div>
+            )}
+            {isSaved && (
+              <div style={{ fontSize: 10, color: '#5cb800', fontWeight: 700, marginTop: 4 }}>● SAVED</div>
+            )}
+            {!isSaved && <div style={{ marginTop: 6, fontSize: 10, color: '#5cb800', fontWeight: 700, textTransform: 'uppercase' }}>Score →</div>}
           </div>
         </div>
-        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 10 }}>
-          {game.scheduled_time && (
-            <div style={{ fontSize: 12, color: '#8a9ab8' }}>{game.scheduled_time.slice(0, 5)}</div>
-          )}
-          {(game.home_score != null || game.away_score != null) && (
-            <div style={{ fontFamily: 'Anton, sans-serif', fontSize: 17, color: '#5cb800', marginTop: 4 }}>
-              {game.home_score ?? 0} – {game.away_score ?? 0}
-            </div>
-          )}
-          {isSaved && (
-            <div style={{ fontSize: 10, color: '#5cb800', fontWeight: 700, marginTop: 4 }}>● SAVED</div>
-          )}
-          {!isSaved && <div style={{ marginTop: 6, fontSize: 10, color: '#5cb800', fontWeight: 700, textTransform: 'uppercase' }}>Score →</div>}
-        </div>
-      </div>
-    </button>
+      </button>
+      {onDelete && (
+        <button
+          onClick={e => { e.stopPropagation(); onDelete(game) }}
+          style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', color: '#2d3748', fontSize: 14, cursor: 'pointer', padding: '2px 6px', borderRadius: 4 }}
+          title="Delete game"
+        >✕</button>
+      )}
+    </div>
   )
 }
 
@@ -967,6 +1052,9 @@ export default function Scoreboard() {
   const [mRound, setMRound] = useState('')
   const [addingManual, setAddingManual] = useState(false)
   const [manualError, setManualError] = useState(null)
+  const [teamSuggestions, setTeamSuggestions] = useState([])
+  const [teamSearchField, setTeamSearchField] = useState(null) // 'home' | 'away'
+  const teamSearchTimer = useRef(null)
 
   // ── Roster + play tracking ────────────────────────────────────────────────
   const [showRosterSetup, setShowRosterSetup] = useState(false)
@@ -1099,6 +1187,21 @@ export default function Scoreboard() {
     setEmail('')
   }
 
+  // ── Team search ────────────────────────────────────────────────────────────
+  function searchTeams(q, field) {
+    setTeamSearchField(field)
+    clearTimeout(teamSearchTimer.current)
+    if (!q.trim()) { setTeamSuggestions([]); return }
+    teamSearchTimer.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from('teams')
+        .select('id, name')
+        .ilike('name', `%${q.trim()}%`)
+        .limit(8)
+      setTeamSuggestions(data || [])
+    }, 250)
+  }
+
   // ── Manual game ────────────────────────────────────────────────────────────
   async function handleAddManualGame() {
     if (!mHome.trim() || !mAway.trim()) return
@@ -1122,6 +1225,7 @@ export default function Scoreboard() {
     }
     setShowManualForm(false)
     setMHome(''); setMAway(''); setMRound('')
+    setTeamSuggestions([])
     setAddingManual(false)
     startGameFlow(data, 0, 0, 1)
   }
@@ -1218,7 +1322,7 @@ export default function Scoreboard() {
     saveTimer.current = setTimeout(() => doSaveToSupabase(game, hs, as_, p), SAVE_DEBOUNCE_MS)
   }, [doSaveToSupabase])
 
-  useEffect(() => () => clearTimeout(saveTimer.current), [])
+  useEffect(() => () => { clearTimeout(saveTimer.current); clearTimeout(teamSearchTimer.current) }, [])
 
   // ── Score helpers ─────────────────────────────────────────────────────────
   function addHome(n) {
@@ -1250,13 +1354,6 @@ export default function Scoreboard() {
   }
 
   function openWizard(type, team) {
-    if (!trackingEnabled || (homeRoster.length === 0 && awayRoster.length === 0)) {
-      // Skip wizard, just score
-      if (type === 'fg2_make') { if (team === 'home') addHome(2); else addAway(2) }
-      else if (type === 'fg3_make') { if (team === 'home') addHome(3); else addAway(3) }
-      else if (type === 'ft') { if (team === 'home') addHome(1); else addAway(1) }
-      return
-    }
     setWizard({
       type, team,
       teamName: team === 'home' ? selectedGame.home_team_name : selectedGame.away_team_name,
@@ -1266,6 +1363,17 @@ export default function Scoreboard() {
       homeRoster,
       awayRoster,
     })
+  }
+
+  async function handleDeleteGame(game) {
+    if (!window.confirm(`Delete "${game.home_team_name} vs ${game.away_team_name}"? This cannot be undone.`)) return
+    await supabase.from('scoreboard_sessions').delete().eq('game_id', game.id)
+    await supabase.from('game_plays').delete().eq('game_id', game.id)
+    await supabase.from('game_rosters').delete().eq('game_id', game.id)
+    await supabase.from('scheduled_games').delete().eq('id', game.id)
+    localStorage.removeItem(LOCAL_KEY(game.id))
+    setMyCourtGames(prev => prev.filter(g => g.id !== game.id))
+    setOtherGames(prev => prev.filter(g => g.id !== game.id))
   }
 
   async function handleComplete() {
@@ -1582,22 +1690,58 @@ export default function Scoreboard() {
                 </div>
 
                 {/* Roster toggle */}
-                {!trackingEnabled && (
-                  <div style={{ textAlign: 'center', fontSize: 11, color: '#4a5568' }}>
-                    Stat tracking disabled.{' '}
-                    <button onClick={() => setShowRosterSetup(true)} style={{ background: 'none', border: 'none', color: '#5cb800', fontSize: 11, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>Add Roster</button>
-                  </div>
-                )}
+                <div style={{ textAlign: 'center', fontSize: 11, color: '#4a5568' }}>
+                  <button onClick={() => setShowRosterSetup(true)} style={{ background: 'none', border: 'none', color: '#4a5568', fontSize: 11, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
+                    {homeRoster.length === 0 && awayRoster.length === 0 ? 'Add Roster for Stats' : 'Edit Roster'}
+                  </button>
+                </div>
               </>
+            )}
+
+            {/* Play history */}
+            {plays.length > 0 && (
+              <PlayLog plays={plays} homeTeamName={selectedGame.home_team_name} awayTeamName={selectedGame.away_team_name} onUndo={async (play) => {
+                // Remove last play that matches this type and team
+                const target = [...plays].reverse().find(p => p.id === play.id)
+                if (!target) return
+                // Reverse score impact
+                let dh = 0, da = 0
+                if (target.play_type === 'fg2_make') { if (target.team === 'home') dh = -2; else da = -2 }
+                else if (target.play_type === 'fg3_make') { if (target.team === 'home') dh = -3; else da = -3 }
+                else if (target.play_type === 'ft_make') { if (target.team === 'home') dh = -1; else da = -1 }
+                const newHome = Math.max(0, homeScore + dh)
+                const newAway = Math.max(0, awayScore + da)
+                await supabase.from('game_plays').delete().eq('id', target.id)
+                setPlays(prev => prev.filter(p => p.id !== target.id))
+                if (dh !== 0 || da !== 0) {
+                  setHomeScore(newHome)
+                  setAwayScore(newAway)
+                  scheduleAutoSave(selectedGame, newHome, newAway, period)
+                }
+              }} />
             )}
 
             {/* Bottom bar */}
             <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
-              <button onClick={handleComplete} disabled={completing} style={{ width: '100%', background: completing ? '#1a2030' : '#5cb800', color: completing ? '#4a5568' : '#04060a', border: 'none', padding: '14px', borderRadius: 10, fontSize: 15, fontWeight: 700, fontFamily: 'Anton, sans-serif', cursor: completing ? 'default' : 'pointer' }}>
-                {completing ? 'Finalizing…' : 'Complete Game →'}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => doSaveToSupabase(selectedGame, homeScore, awayScore, period)}
+                  style={{ flex: 1, background: '#080f04', color: '#5cb800', border: '1px solid #2a4010', padding: '13px', borderRadius: 10, fontSize: 13, fontWeight: 700, fontFamily: 'Anton, sans-serif', cursor: 'pointer' }}
+                >
+                  💾 Save
+                </button>
+                <button onClick={handleComplete} disabled={completing} style={{ flex: 2, background: completing ? '#1a2030' : '#5cb800', color: completing ? '#4a5568' : '#04060a', border: 'none', padding: '14px', borderRadius: 10, fontSize: 15, fontWeight: 700, fontFamily: 'Anton, sans-serif', cursor: completing ? 'default' : 'pointer' }}>
+                  {completing ? 'Finalizing…' : 'Complete Game →'}
+                </button>
+              </div>
+              <button
+                onClick={() => handleDeleteGame(selectedGame)}
+                style={{ background: 'transparent', border: '1px solid #3a0a0a', color: '#6b3333', borderRadius: 10, padding: '10px', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+              >
+                🗑 Delete Game
               </button>
               <div style={{ textAlign: 'center', fontSize: 10, color: '#2d3748' }}>
-                💾 Auto-saves every {SAVE_DEBOUNCE_MS / 1000}s · Safe to leave and return
+                Auto-saves · Safe to leave and return
               </div>
             </div>
           </div>
@@ -1667,7 +1811,7 @@ export default function Scoreboard() {
                     <span style={{ color: '#4a5568' }}>— {filteredMyCourt.length} game{filteredMyCourt.length !== 1 ? 's' : ''}</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {filteredMyCourt.map(g => <GameCard key={g.id} game={g} onSelect={handleSelectGame} highlight savedGames={savedGames} />)}
+                    {filteredMyCourt.map(g => <GameCard key={g.id} game={g} onSelect={handleSelectGame} onDelete={handleDeleteGame} highlight savedGames={savedGames} />)}
                   </div>
                 </div>
               )}
@@ -1677,7 +1821,7 @@ export default function Scoreboard() {
                     {filteredMyCourt.length > 0 ? 'All Other Games' : `Today · ${filteredOther.length} game${filteredOther.length !== 1 ? 's' : ''}`}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {filteredOther.map(g => <GameCard key={g.id} game={g} onSelect={handleSelectGame} savedGames={savedGames} />)}
+                    {filteredOther.map(g => <GameCard key={g.id} game={g} onSelect={handleSelectGame} onDelete={handleDeleteGame} savedGames={savedGames} />)}
                   </div>
                 </div>
               )}
@@ -1702,10 +1846,41 @@ export default function Scoreboard() {
             <div style={{ fontSize: 12, color: '#4a5568', marginBottom: 22 }}>This game will be saved and scored immediately.</div>
 
             <label style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 5 }}>Home Team</label>
-            <input value={mHome} onChange={e => setMHome(e.target.value)} placeholder="Home team name" autoFocus style={{ width: '100%', background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '12px 14px', fontSize: 14, outline: 'none', boxSizing: 'border-box', marginBottom: 12 }} />
+            <div style={{ position: 'relative', marginBottom: 12 }}>
+              <input
+                value={mHome}
+                onChange={e => { setMHome(e.target.value); searchTeams(e.target.value, 'home') }}
+                onFocus={() => setTeamSearchField('home')}
+                placeholder="Search or type team name"
+                autoFocus
+                style={{ width: '100%', background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '12px 14px', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+              />
+              {teamSearchField === 'home' && teamSuggestions.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#0d1320', border: '1px solid #1a2030', borderRadius: 8, zIndex: 10, marginTop: 2, overflow: 'hidden' }}>
+                  {teamSuggestions.map(t => (
+                    <button key={t.id} onClick={() => { setMHome(t.name); setTeamSuggestions([]) }} style={{ width: '100%', background: 'none', border: 'none', color: '#d8e0f0', padding: '10px 14px', fontSize: 13, textAlign: 'left', cursor: 'pointer', borderBottom: '1px solid #1a2030' }}>{t.name}</button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <label style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 5 }}>Away Team</label>
-            <input value={mAway} onChange={e => setMAway(e.target.value)} placeholder="Away team name" style={{ width: '100%', background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '12px 14px', fontSize: 14, outline: 'none', boxSizing: 'border-box', marginBottom: 12 }} />
+            <div style={{ position: 'relative', marginBottom: 12 }}>
+              <input
+                value={mAway}
+                onChange={e => { setMAway(e.target.value); searchTeams(e.target.value, 'away') }}
+                onFocus={() => setTeamSearchField('away')}
+                placeholder="Search or type team name"
+                style={{ width: '100%', background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '12px 14px', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+              />
+              {teamSearchField === 'away' && teamSuggestions.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#0d1320', border: '1px solid #1a2030', borderRadius: 8, zIndex: 10, marginTop: 2, overflow: 'hidden' }}>
+                  {teamSuggestions.map(t => (
+                    <button key={t.id} onClick={() => { setMAway(t.name); setTeamSuggestions([]) }} style={{ width: '100%', background: 'none', border: 'none', color: '#d8e0f0', padding: '10px 14px', fontSize: 13, textAlign: 'left', cursor: 'pointer', borderBottom: '1px solid #1a2030' }}>{t.name}</button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <label style={{ fontSize: 11, color: '#4a5568', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 5 }}>Round / Label <span style={{ color: '#2d3748', fontWeight: 400 }}>(optional)</span></label>
             <input value={mRound} onChange={e => setMRound(e.target.value)} placeholder="e.g. Pool A, Quarterfinal" onKeyDown={e => e.key === 'Enter' && handleAddManualGame()} style={{ width: '100%', background: '#0e1320', border: '1px solid #1a2030', color: '#d8e0f0', borderRadius: 8, padding: '12px 14px', fontSize: 14, outline: 'none', boxSizing: 'border-box', marginBottom: 18 }} />
@@ -1715,7 +1890,7 @@ export default function Scoreboard() {
             )}
 
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setShowManualForm(false)} style={{ flex: 1, background: 'transparent', color: '#6b7a99', border: '1px solid #1a2030', padding: 13, borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>Cancel</button>
+              <button onClick={() => { setShowManualForm(false); setTeamSuggestions([]) }} style={{ flex: 1, background: 'transparent', color: '#6b7a99', border: '1px solid #1a2030', padding: 13, borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>Cancel</button>
               <button onClick={handleAddManualGame} disabled={addingManual || !mHome.trim() || !mAway.trim()} style={{ flex: 2, background: addingManual || !mHome.trim() || !mAway.trim() ? '#1a2030' : '#5cb800', color: addingManual || !mHome.trim() || !mAway.trim() ? '#4a5568' : '#04060a', border: 'none', padding: 13, borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>
                 {addingManual ? 'Creating…' : 'Start Scoring →'}
               </button>
